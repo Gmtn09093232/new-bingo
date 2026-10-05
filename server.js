@@ -1,19 +1,11 @@
 // telegram-auth/server.js
 //
 // Standalone Node service (runs on Render).
-// Replaces the Supabase Edge Function "telegram-auth".
 //
-//   POST /telegram-auth   { initData }  →  { access_token, refresh_token, expires_at, user }
-//   GET  /health                        →  { ok: true }
-//
-// Env vars (set in Render → Environment):
-//   SUPABASE_URL
-//   SUPABASE_ANON_KEY
-//   SUPABASE_SERVICE_ROLE_KEY
-//   TELEGRAM_BOT_TOKEN
-//   USER_EMAIL_DOMAIN   (optional, default "telegram.local")
-//   ALLOWED_ORIGIN      (optional, default "*")
-//   PORT                (Render injects this automatically — do not set)
+//   GET  /               →  status page (browser-friendly)
+//   GET  /health         →  { ok: true }
+//   POST /telegram-auth  →  { access_token, refresh_token, expires_at, user }
+//   POST /               →  alias for /telegram-auth
 
 import express from 'express';
 import { createHmac, timingSafeEqual as nodeTimingSafeEqual } from 'node:crypto';
@@ -46,12 +38,29 @@ app.use(express.json({ limit: '32kb' }));
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin',  ALLOWED_ORIGIN);
   res.setHeader('Access-Control-Allow-Headers', 'authorization, x-client-info, apikey, content-type');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
 
+// ---------- routes ----------
 app.get('/health', (_req, res) => res.json({ ok: true, at: new Date().toISOString() }));
+
+app.get('/', (_req, res) => {
+  res.json({
+    service: 'bingo-telegram-auth',
+    status:  'up',
+    at:      new Date().toISOString(),
+    endpoints: {
+      'POST /telegram-auth': 'Validate Telegram initData and mint a Supabase session',
+      'GET  /health':        'Liveness probe',
+    },
+    hint: 'POST { "initData": "..." } to /telegram-auth',
+  });
+});
+
+app.post('/telegram-auth', handleAuth);
+app.post('/',              handleAuth);
 
 // ---------- main handler ----------
 async function handleAuth(req, res) {
@@ -75,20 +84,15 @@ async function handleAuth(req, res) {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Deterministic email + password — same Telegram user always maps to the
-    // same Supabase auth user. The password is a keyed HMAC over the bot token
-    // and never leaves this process.
     const email    = `tg_${tg.id}@${USER_EMAIL_DOMAIN}`;
     const password = derivePassword(tg.id, TELEGRAM_BOT_TOKEN);
 
     let session = null;
 
-    // Fast path: try to sign in.
     const signIn = await authClient.auth.signInWithPassword({ email, password });
     if (!signIn.error && signIn.data.session) {
       session = signIn.data.session;
     } else {
-      // Create the user.
       const created = await admin.auth.admin.createUser({
         email,
         password,
@@ -105,8 +109,6 @@ async function handleAuth(req, res) {
         return res.status(500).json({ error: 'USER_CREATE_FAILED' });
       }
 
-      // If the account exists with a stale password (bot token rotated),
-      // locate it via profiles.telegram_id and reset.
       if (alreadyExists) {
         const { data: profile, error: pErr } = await admin
           .from('profiles')
@@ -136,7 +138,6 @@ async function handleAuth(req, res) {
 
     const userId = session.user.id;
 
-    // Refresh display fields — name/photo may have changed in Telegram.
     await admin
       .from('profiles')
       .update({
@@ -164,15 +165,13 @@ async function handleAuth(req, res) {
   }
 }
 
-app.post('/telegram-auth', handleAuth);
-app.post('/',              handleAuth);   // alias so root probes also work
-
+// ---------- listen ----------
 app.listen(PORT, () => {
   console.log(`[telegram-auth] listening on :${PORT}`);
 });
 
 // ============================================================================
-// TELEGRAM INITDATA VERIFICATION  (identical algorithm to the Edge Function)
+// TELEGRAM INITDATA VERIFICATION
 // ============================================================================
 
 function verifyTelegramInitData(initData, botToken) {
@@ -188,16 +187,13 @@ function verifyTelegramInitData(initData, botToken) {
   if (ageSec < -60)              return { ok: false, error: 'AUTH_DATE_IN_FUTURE' };
   if (ageSec > MAX_AUTH_AGE_SEC) return { ok: false, error: 'EXPIRED' };
 
-  // data_check_string = all fields except hash, sorted by key, joined with \n
   params.delete('hash');
   const dataCheckString = [...params.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([k, v]) => `${k}=${v}`)
     .join('\n');
 
-  // secret_key = HMAC-SHA256("WebAppData", bot_token)
-  const secretKey  = createHmac('sha256', 'WebAppData').update(botToken).digest();
-  // computed   = HMAC-SHA256(secret_key, data_check_string)
+  const secretKey   = createHmac('sha256', 'WebAppData').update(botToken).digest();
   const computedHex = createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
 
   if (!timingSafeEqualHex(computedHex, hash.toLowerCase())) {
@@ -217,7 +213,6 @@ function verifyTelegramInitData(initData, botToken) {
   return { ok: true, user };
 }
 
-// Keys MUST match what handle_new_user() reads in database.sql
 function telegramMetadata(tg) {
   return {
     telegram_id:         String(tg.id),
@@ -230,8 +225,6 @@ function telegramMetadata(tg) {
   };
 }
 
-// Deterministic per-user password. Changing TELEGRAM_BOT_TOKEN invalidates
-// existing derived passwords — handled by the reset branch above.
 function derivePassword(telegramId, botToken) {
   const sig = createHmac('sha256', botToken).update(`tg-pw:${telegramId}`).digest();
   const b64 = sig.toString('base64')
@@ -241,7 +234,6 @@ function derivePassword(telegramId, botToken) {
   return `Tg!${b64}Aa1`;
 }
 
-// Constant-time compare over hex strings.
 function timingSafeEqualHex(a, b) {
   if (a.length !== b.length) return false;
   const ba = Buffer.from(a, 'hex');

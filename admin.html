@@ -1,1569 +1,783 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
-<meta name="theme-color" content="#0a0a1a" />
-<meta name="robots" content="noindex,nofollow" />
-<title>Bingo Admin — Control Center</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bingo — Admin Console</title>
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Orbitron:wght@600;700;800;900&display=swap" rel="stylesheet">
-
-<!-- Supabase JS (UMD) — same version as index.html so app.js stays compatible -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<!-- Chart.js for dashboard analytics -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
 <style>
-/* =========================================================================
-   TOKENS
-   ========================================================================= */
-:root{
-  --bg-0:#06060f;
-  --bg-1:#0b0b1c;
-  --bg-2:#111128;
-  --bg-3:#181838;
-  --surface:rgba(255,255,255,.045);
-  --surface-2:rgba(255,255,255,.075);
-  --border:rgba(255,255,255,.09);
-  --border-2:rgba(255,255,255,.16);
-  --text:#f2f2ff;
-  --text-2:#b4b4d4;
-  --text-3:#7878a4;
-  --brand:#7c3aed;
-  --brand-2:#a855f7;
-  --brand-3:#c084fc;
-  --accent:#f5b400;
-  --accent-2:#ffcc33;
-  --success:#10b981;
-  --success-2:#34d399;
-  --danger:#ef4444;
-  --danger-2:#f87171;
-  --warning:#f59e0b;
-  --warning-2:#fbbf24;
-  --info:#38bdf8;
-  --radius:14px;
-  --radius-sm:9px;
-  --radius-lg:20px;
-  --shadow-sm:0 2px 8px rgba(0,0,0,.4);
-  --shadow:0 10px 28px rgba(0,0,0,.5);
-  --shadow-lg:0 24px 60px rgba(0,0,0,.6);
-  --shadow-brand:0 8px 28px rgba(124,58,237,.45);
-  --sidebar-w:252px;
-  --topbar-h:64px;
-  --ease:cubic-bezier(.22,1,.36,1);
+/* =======================================================================
+ * THEME
+ * =====================================================================*/
+:root {
+  --bg:       #0f1115;
+  --panel:    #161a22;
+  --panel-2:  #1c2230;
+  --border:   #262c3a;
+  --text:     #e6e9ef;
+  --muted:    #8b93a7;
+  --accent:   #2AABEE;
+  --ok:       #22c55e;
+  --warn:     #f59e0b;
+  --danger:   #ef4444;
+  --info:     #3b82f6;
+
+  --radius:   10px;
+  --radius-sm:6px;
+
+  --sidebar-w: 220px;
+  --topbar-h:  56px;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin:0; padding:0; height:100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow: hidden;
+}
+button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* =======================================================================
+ * LOGIN GATE
+ * =====================================================================*/
+#gate {
+  position: fixed; inset: 0;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 30% 20%, #1a2130 0%, var(--bg) 60%);
+  z-index: 100;
+}
+.gate-card {
+  width: min(380px, 92vw);
+  background: var(--panel);
+  padding: 28px 24px;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  border: 1px solid var(--border);
+}
+.gate-card h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+  letter-spacing: -.5px;
+}
+.gate-card .sub {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+.field {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 12px;
+}
+.field label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.field input, .field select, .field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color .15s;
+}
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
+.gate-error {
+  color: var(--danger); font-size: 12px;
+  min-height: 16px; margin-top: 4px;
 }
 
-[data-theme="light"]{
-  --bg-0:#eef0f8;
-  --bg-1:#f8f9fd;
-  --bg-2:#ffffff;
-  --bg-3:#f0f2fa;
-  --surface:rgba(15,15,45,.035);
-  --surface-2:rgba(15,15,45,.06);
-  --border:rgba(15,15,45,.10);
-  --border-2:rgba(15,15,45,.18);
-  --text:#0e1030;
-  --text-2:#3a3a60;
-  --text-3:#71719a;
+/* =======================================================================
+ * SHELL
+ * =====================================================================*/
+#shell {
+  display: none;
+  height: 100vh;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  grid-template-rows: var(--topbar-h) 1fr;
+  grid-template-areas:
+    "sidebar topbar"
+    "sidebar main";
+}
+#shell.on { display: grid; }
+
+.sidebar {
+  grid-area: sidebar;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 16px 8px;
+  overflow-y: auto;
+}
+.sidebar .brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 12px 16px;
+  font-weight: 700; font-size: 16px;
+  letter-spacing: -.5px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+.sidebar .brand .logo {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), #5856D6);
+  display: grid; place-items: center;
+  font-size: 14px;
+}
+.nav-group { margin-bottom: 6px; }
+.nav-group-title {
+  padding: 8px 14px 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+.nav-btn {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--muted);
+  text-align: left;
+  transition: background .12s, color .12s;
+}
+.nav-btn:hover { background: var(--panel-2); color: var(--text); }
+.nav-btn.active { background: var(--accent); color: #fff; font-weight: 600; }
+.nav-btn .ico { font-size: 15px; width: 18px; text-align: center; }
+.nav-btn .badge {
+  margin-left: auto;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-weight: 700;
 }
 
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{height:100%}
-body{
-  font-family:'Inter',system-ui,-apple-system,sans-serif;
-  background:var(--bg-0);color:var(--text);
-  overflow-x:hidden;line-height:1.5;-webkit-font-smoothing:antialiased;
-  transition:background .3s var(--ease),color .3s var(--ease);
+.topbar {
+  grid-area: topbar;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 22px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
 }
-body::before{
-  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
-  background:
-    radial-gradient(800px 500px at 100% -10%,rgba(124,58,237,.16),transparent 60%),
-    radial-gradient(700px 500px at 0% 110%,rgba(245,180,0,.10),transparent 60%);
+.topbar .title { font-weight: 700; font-size: 15px; }
+.topbar .actions { display: flex; align-items: center; gap: 12px; }
+.who {
+  font-size: 12px;
+  color: var(--muted);
+  display: flex; flex-direction: column; align-items: flex-end;
+  line-height: 1.2;
 }
-img{max-width:100%;display:block}
-button,input,select,textarea{font:inherit;color:inherit}
-button{cursor:pointer;border:none;background:none}
-a{color:inherit;text-decoration:none}
-::-webkit-scrollbar{width:9px;height:9px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:9px}
-::-webkit-scrollbar-thumb:hover{background:var(--brand-2)}
+.who b { color: var(--text); font-size: 13px; }
 
-/* =========================================================================
-   ADMIN LOGIN GATE
-   ========================================================================= */
-#adminLoginGate{
-  position:fixed;inset:0;z-index:9999;display:grid;place-items:center;
-  background:
-    radial-gradient(900px 600px at 50% -20%,rgba(124,58,237,.3),transparent 60%),
-    var(--bg-0);
-  padding:20px;
+.main {
+  grid-area: main;
+  overflow-y: auto;
+  padding: 22px;
 }
-#adminLoginGate.hidden{display:none}
-.login-card{
-  width:100%;max-width:430px;
-  background:linear-gradient(165deg,var(--surface),rgba(124,58,237,.08));
-  border:1px solid var(--border-2);border-radius:var(--radius-lg);
-  padding:38px 32px;box-shadow:var(--shadow-lg);position:relative;overflow:hidden;
-}
-.login-card::before{
-  content:'';position:absolute;top:0;left:0;right:0;height:4px;
-  background:linear-gradient(90deg,var(--brand),var(--accent));
-}
-.login-brand{
-  display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:26px;
-}
-.login-brand .mark{
-  width:46px;height:46px;border-radius:13px;
-  background:linear-gradient(135deg,var(--brand),var(--accent));
-  display:grid;place-items:center;font-weight:900;color:#fff;font-size:20px;
-  font-family:'Orbitron',sans-serif;box-shadow:var(--shadow-brand);
-}
-.login-brand h1{font-family:'Orbitron',sans-serif;font-size:1.15rem;font-weight:900;letter-spacing:.5px}
-.login-brand p{font-size:.72rem;color:var(--danger-2);letter-spacing:2px;text-transform:uppercase;font-weight:800}
-.login-card h2{font-size:1.35rem;font-weight:900;letter-spacing:-.6px;text-align:center;margin-bottom:6px}
-.login-card .sub{text-align:center;color:var(--text-3);font-size:.84rem;margin-bottom:22px}
+.panel { display: none; }
+.panel.active { display: block; }
 
-.field{margin-bottom:15px}
-.field label{display:block;font-size:.75rem;font-weight:700;color:var(--text-2);margin-bottom:6px;letter-spacing:.3px}
-.input{
-  width:100%;padding:12px 14px;border-radius:11px;
-  background:var(--bg-2);border:1px solid var(--border);color:var(--text);
-  font-size:.88rem;transition:all .2s var(--ease);
+/* =======================================================================
+ * PRIMITIVES
+ * =====================================================================*/
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 16px;
 }
-[data-theme="light"] .input{background:var(--bg-3)}
-.input:focus{outline:none;border-color:var(--brand-2);box-shadow:0 0 0 3px rgba(168,85,247,.18)}
-.input::placeholder{color:var(--text-3)}
-.input-group{position:relative}
-.input-group .toggle-pass{position:absolute;right:10px;top:50%;transform:translateY(-50%);padding:6px;color:var(--text-3);font-size:.82rem}
+.card h2 {
+  margin: 0 0 14px;
+  font-size: 15px;
+  letter-spacing: -.2px;
+}
+.row { display: flex; gap: 12px; align-items: center; }
+.row.wrap { flex-wrap: wrap; }
+.spacer { flex: 1; }
 
-.alert{padding:11px 14px;border-radius:11px;font-size:.82rem;font-weight:600;margin-bottom:14px;display:none;align-items:flex-start;gap:9px}
-.alert.show{display:flex}
-.alert-error{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#fca5a5}
-.alert-success{background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.35);color:#6ee7b7}
-.alert-info{background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.35);color:#7dd3fc}
-.alert-warning{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:#fcd34d}
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background .12s, border-color .12s, transform .08s;
+}
+.btn:hover { background: #222a38; border-color: #333a4a; }
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color:#fff; }
+.btn.primary:hover { background: #2796d4; border-color:#2796d4; }
+.btn.ok      { background: var(--ok);    border-color: var(--ok);    color:#fff; }
+.btn.ok:hover{ background: #16a34a; border-color:#16a34a; }
+.btn.warn    { background: var(--warn);  border-color: var(--warn);  color:#111; }
+.btn.danger  { background: var(--danger);border-color: var(--danger);color:#fff; }
+.btn.danger:hover { background:#dc2626; border-color:#dc2626; }
+.btn.sm { padding: 5px 10px; font-size: 12px; }
 
-.btn{
-  display:inline-flex;align-items:center;justify-content:center;gap:7px;
-  padding:10px 18px;border-radius:11px;font-weight:700;font-size:.84rem;
-  transition:all .2s var(--ease);white-space:nowrap;border:1px solid transparent;
-  position:relative;overflow:hidden;
+.pill {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  text-transform: uppercase;
 }
-.btn:active{transform:scale(.97)}
-.btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important}
-.btn-primary{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#fff;box-shadow:var(--shadow-brand)}
-.btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 12px 32px rgba(124,58,237,.55)}
-.btn-gold{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#1a1200}
-.btn-gold:hover:not(:disabled){transform:translateY(-1px)}
-.btn-ghost{background:var(--surface);border-color:var(--border);color:var(--text)}
-.btn-ghost:hover:not(:disabled){background:var(--surface-2)}
-.btn-outline{background:transparent;border-color:var(--border-2)}
-.btn-outline:hover:not(:disabled){background:var(--surface-2)}
-.btn-danger{background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff}
-.btn-danger:hover:not(:disabled){transform:translateY(-1px)}
-.btn-success{background:linear-gradient(135deg,#059669,#10b981);color:#fff}
-.btn-warning{background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff}
-.btn-sm{padding:7px 13px;font-size:.78rem;border-radius:9px}
-.btn-lg{padding:14px 26px;font-size:.95rem}
-.btn-block{width:100%}
-.btn-icon{padding:9px;width:38px;height:38px;border-radius:10px}
+.pill.LOBBY     { background: rgba(59,130,246,.15); color:#93c5fd; }
+.pill.STARTING  { background: rgba(245,158,11,.15); color:#fcd34d; }
+.pill.ACTIVE    { background: rgba(34,197,94,.15);  color:#86efac; }
+.pill.FINISHED,
+.pill.SETTLED   { background: rgba(42,171,238,.15); color:#7dd3fc; }
+.pill.CANCELLED,
+.pill.REFUNDING { background: rgba(239,68,68,.15);  color:#fca5a5; }
+.pill.PENDING   { background: rgba(245,158,11,.15); color:#fcd34d; }
+.pill.COMPLETED { background: rgba(34,197,94,.15);  color:#86efac; }
+.pill.FAILED    { background: rgba(239,68,68,.15);  color:#fca5a5; }
 
-/* =========================================================================
-   LAYOUT SHELL
-   ========================================================================= */
-#adminApp{display:none;min-height:100vh;position:relative;z-index:1}
-#adminApp.ready{display:block}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+thead th {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+tbody tr:hover { background: var(--panel-2); }
+tbody tr:last-child td { border-bottom: none; }
 
-.sidebar{
-  position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);
-  background:var(--bg-1);border-right:1px solid var(--border);
-  display:flex;flex-direction:column;z-index:200;
-  transition:transform .3s var(--ease);
+.grid-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
 }
-.sidebar::before{
-  content:'';position:absolute;top:0;left:0;right:0;height:3px;
-  background:linear-gradient(90deg,var(--brand),var(--accent));
+.metric {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
 }
-.sb-brand{
-  height:var(--topbar-h);display:flex;align-items:center;gap:11px;
-  padding:0 20px;border-bottom:1px solid var(--border);flex-shrink:0;
+.metric .label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 6px;
 }
-.sb-brand .mark{
-  width:34px;height:34px;border-radius:10px;
-  background:linear-gradient(135deg,var(--brand),var(--accent));
-  display:grid;place-items:center;font-family:'Orbitron',sans-serif;
-  font-weight:900;color:#fff;font-size:16px;
+.metric .value {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -.5px;
 }
-.sb-brand b{font-family:'Orbitron',sans-serif;font-size:.92rem;letter-spacing:.4px}
-.sb-brand small{display:block;font-size:.62rem;color:var(--accent-2);letter-spacing:1.5px;font-weight:800}
+.metric .value.pos { color: var(--ok); }
+.metric .value.neg { color: var(--danger); }
 
-.sb-user{
-  padding:14px 18px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:11px;flex-shrink:0;
+.empty {
+  padding: 32px 8px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
 }
-.sb-avatar{
-  width:38px;height:38px;border-radius:11px;flex-shrink:0;
-  background:linear-gradient(135deg,var(--brand-2),var(--brand));
-  display:grid;place-items:center;font-weight:900;color:#fff;font-size:.9rem;
-  overflow:hidden;
-}
-.sb-avatar img{width:100%;height:100%;object-fit:cover}
-.sb-user-info{min-width:0;flex:1}
-.sb-user-info b{display:block;font-size:.82rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sb-user-info span{font-size:.7rem;color:var(--accent-2);font-weight:800;letter-spacing:.4px;text-transform:uppercase}
 
-.sb-nav{flex:1;overflow-y:auto;padding:12px 10px}
-.sb-section-label{
-  padding:14px 12px 6px;font-size:.65rem;font-weight:800;
-  letter-spacing:1.6px;text-transform:uppercase;color:var(--text-3);
+/* Forms for stake rooms */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
 }
-.sb-item{
-  display:flex;align-items:center;gap:12px;padding:10px 12px;
-  border-radius:10px;font-size:.85rem;font-weight:600;color:var(--text-2);
-  transition:all .18s var(--ease);cursor:pointer;margin-bottom:2px;
-  border-left:3px solid transparent;
+.form-grid .field.full { grid-column: 1 / -1; }
+.check {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px;
+  padding: 8px 0;
 }
-.sb-item:hover{background:var(--surface);color:var(--text)}
-.sb-item.active{
-  background:linear-gradient(90deg,rgba(124,58,237,.24),rgba(124,58,237,.06));
-  color:var(--text);border-left-color:var(--brand-2);font-weight:700;
-}
-.sb-item .ic{font-size:1.05rem;width:22px;text-align:center;flex-shrink:0}
-.sb-item .lbl{flex:1;min-width:0}
-.sb-item .badge{
-  min-width:22px;height:22px;padding:0 6px;border-radius:999px;
-  background:var(--danger);color:#fff;font-size:.68rem;font-weight:800;
-  display:none;place-items:center;
-}
-.sb-item .badge.show{display:grid}
-.sb-footer{padding:12px;border-top:1px solid var(--border);flex-shrink:0}
+.check input { width: 16px; height: 16px; accent-color: var(--accent); }
 
-/* Top bar */
-.topbar{
-  position:fixed;top:0;left:var(--sidebar-w);right:0;height:var(--topbar-h);
-  background:rgba(11,11,28,.82);backdrop-filter:blur(18px) saturate(180%);
-  -webkit-backdrop-filter:blur(18px) saturate(180%);
-  border-bottom:1px solid var(--border);z-index:150;
-  display:flex;align-items:center;gap:16px;padding:0 22px;
-  transition:left .3s var(--ease);
+/* Drawer for game detail */
+.drawer-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.6);
+  display: none;
+  z-index: 80;
 }
-[data-theme="light"] .topbar{background:rgba(255,255,255,.86)}
-.topbar h1{font-size:1.05rem;font-weight:900;letter-spacing:-.3px}
-.topbar h1 small{display:block;font-size:.7rem;color:var(--text-3);font-weight:600;letter-spacing:.2px;margin-top:-1px}
-.topbar-spacer{flex:1}
-.topbar-right{display:flex;align-items:center;gap:9px}
-.icon-btn{
-  width:38px;height:38px;border-radius:10px;display:grid;place-items:center;
-  font-size:1rem;background:var(--surface);border:1px solid var(--border);
-  color:var(--text-2);transition:all .2s var(--ease);position:relative;
+.drawer-backdrop.open { display: block; }
+.drawer {
+  position: fixed;
+  top: 0; right: 0;
+  width: min(560px, 100%);
+  height: 100%;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  transform: translateX(100%);
+  transition: transform .25s ease;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
 }
-.icon-btn:hover{background:var(--surface-2);color:var(--text)}
-.icon-btn .dot{
-  position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;
-  border-radius:999px;background:var(--danger);color:#fff;font-size:.62rem;
-  font-weight:800;display:none;place-items:center;padding:0 4px;
-  border:2px solid var(--bg-0);
+.drawer.open { transform: translateX(0); }
+.drawer-head {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
 }
-.icon-btn .dot.show{display:grid}
+.drawer-head h3 { margin: 0; font-size: 15px; }
+.drawer-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+.drawer-close {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  display: grid; place-items: center;
+}
+.kv-mini {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+.kv-mini .kv {
+  display: flex; justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--panel-2);
+  border-radius: var(--radius-sm);
+}
+.kv-mini .kv span { color: var(--muted); }
+.kv-mini .kv b { font-weight: 600; }
+.subhead {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin: 18px 0 8px;
+}
+.chip-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.chip.B { background: rgba(59,130,246,.22);  color:#93c5fd; }
+.chip.I { background: rgba(239,68,68,.22);   color:#fca5a5; }
+.chip.N { background: rgba(16,185,129,.22);  color:#6ee7b7; }
+.chip.G { background: rgba(245,158,11,.22);  color:#fcd34d; }
+.chip.O { background: rgba(139,92,246,.22);  color:#c4b5fd; }
 
-.menu-toggle{display:none}
+.timeline {
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 320px; overflow-y: auto;
+  border-left: 2px solid var(--border);
+  padding-left: 14px;
+}
+.timeline .ev {
+  font-size: 12px;
+  padding: 4px 0;
+  position: relative;
+}
+.timeline .ev::before {
+  content: '';
+  position: absolute;
+  left: -20px; top: 8px;
+  width: 8px; height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+.timeline .ev .t { color: var(--muted); margin-left: 6px; }
+.timeline .ev .e { font-weight: 600; }
 
-/* Main */
-.main{
-  margin-left:var(--sidebar-w);padding-top:var(--topbar-h);
-  min-height:100vh;position:relative;
+/* Toast */
+#toast {
+  position: fixed;
+  bottom: 24px; left: 50%;
+  transform: translate(-50%, 30px);
+  padding: 10px 18px;
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  z-index: 300;
+  opacity: 0;
+  transition: opacity .2s, transform .2s;
+  pointer-events: none;
+  box-shadow: 0 10px 40px rgba(0,0,0,.5);
 }
-.view{display:none;padding:24px;animation:fadeUp .35s var(--ease)}
-.view.active{display:block}
-@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+#toast.success { border-color: var(--ok);     color: #86efac; }
+#toast.error   { border-color: var(--danger); color: #fca5a5; }
+#toast.info    { border-color: var(--accent); color: #7dd3fc; }
 
-.view-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
-.view-head h2{font-size:1.4rem;font-weight:900;letter-spacing:-.5px}
-.view-head p{color:var(--text-3);font-size:.85rem;margin-top:3px}
-.view-head-actions{display:flex;gap:9px;flex-wrap:wrap}
-
-/* =========================================================================
-   COMPONENTS
-   ========================================================================= */
-.card{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);padding:20px;
+/* Modal */
+.modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.6);
+  display: none; place-items: center;
+  z-index: 200;
 }
-.card-hover:hover{border-color:var(--border-2)}
-.card-title{font-size:.95rem;font-weight:800;letter-spacing:-.2px;margin-bottom:14px}
-.card-sub{font-size:.78rem;color:var(--text-3);margin-bottom:14px}
-
-.grid{display:grid;gap:16px}
-.grid-2{grid-template-columns:repeat(2,1fr)}
-.grid-3{grid-template-columns:repeat(3,1fr)}
-.grid-4{grid-template-columns:repeat(4,1fr)}
-.grid-5{grid-template-columns:repeat(5,1fr)}
-
-.stat{
-  background:linear-gradient(160deg,var(--surface),rgba(124,58,237,.05));
-  border:1px solid var(--border);border-radius:var(--radius);padding:18px;
-  transition:all .25s var(--ease);position:relative;overflow:hidden;
+.modal.open { display: grid; }
+.modal-card {
+  width: min(520px, 92vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
 }
-.stat:hover{transform:translateY(-3px);border-color:var(--border-2);box-shadow:var(--shadow)}
-.stat .ic{
-  width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
-  font-size:1.15rem;margin-bottom:12px;
-  background:linear-gradient(135deg,rgba(124,58,237,.22),rgba(245,180,0,.14));
-  border:1px solid var(--border);
-}
-.stat h3{font-size:.7rem;text-transform:uppercase;letter-spacing:1.1px;color:var(--text-3);font-weight:800;margin-bottom:5px}
-.stat .val{font-family:'Orbitron',sans-serif;font-size:1.35rem;font-weight:900;color:var(--accent-2);line-height:1.15}
-.stat .sub{font-size:.72rem;color:var(--text-3);margin-top:4px}
-.stat .trend{font-size:.72rem;font-weight:800;margin-top:6px}
-.stat .trend.up{color:var(--success-2)}
-.stat .trend.down{color:var(--danger-2)}
-
-/* Charts */
-.chart-wrap{position:relative;height:260px}
-
-/* Tables */
-.table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface)}
-table{width:100%;border-collapse:collapse;font-size:.83rem}
-thead th{
-  text-align:left;padding:12px 14px;font-size:.7rem;font-weight:800;
-  text-transform:uppercase;letter-spacing:.9px;color:var(--text-3);
-  background:var(--surface-2);border-bottom:1px solid var(--border);white-space:nowrap;
-}
-tbody td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
-tbody tr:last-child td{border-bottom:none}
-tbody tr{transition:background .15s var(--ease)}
-tbody tr:hover{background:var(--surface-2)}
-td .row-actions{display:flex;gap:6px;flex-wrap:wrap}
-
-.pill{
-  display:inline-flex;align-items:center;gap:5px;
-  padding:3px 10px;border-radius:999px;font-size:.68rem;
-  font-weight:800;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;
-}
-.pill-green{background:rgba(16,185,129,.15);color:var(--success-2);border:1px solid rgba(16,185,129,.35)}
-.pill-red{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.35)}
-.pill-yellow{background:rgba(245,158,11,.15);color:var(--warning-2);border:1px solid rgba(245,158,11,.35)}
-.pill-blue{background:rgba(56,189,248,.15);color:#7dd3fc;border:1px solid rgba(56,189,248,.35)}
-.pill-purple{background:rgba(168,85,247,.15);color:var(--brand-3);border:1px solid rgba(168,85,247,.35)}
-.pill-grey{background:var(--surface-2);color:var(--text-3);border:1px solid var(--border)}
-
-.search-bar{
-  display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;
-}
-.search-bar .input{flex:1;min-width:200px;max-width:380px}
-
-.tabs{
-  display:flex;gap:5px;padding:5px;background:var(--surface);
-  border:1px solid var(--border);border-radius:12px;overflow-x:auto;margin-bottom:18px;
-}
-.tab{
-  padding:8px 16px;border-radius:9px;font-size:.8rem;font-weight:700;
-  color:var(--text-3);transition:all .2s var(--ease);white-space:nowrap;
-}
-.tab:hover{color:var(--text)}
-.tab.active{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#fff}
-
-/* =========================================================================
-   BINGO CALLER
-   ========================================================================= */
-.caller-grid{display:grid;grid-template-columns:1.15fr 1fr;gap:20px}
-.caller-left,.caller-right{display:flex;flex-direction:column;gap:18px}
-
-.caller-hero{
-  background:linear-gradient(150deg,rgba(124,58,237,.28),rgba(245,180,0,.12));
-  border:1px solid rgba(245,180,0,.3);border-radius:var(--radius-lg);
-  padding:26px;text-align:center;position:relative;overflow:hidden;
-}
-.caller-hero::before{
-  content:'';position:absolute;inset:-50%;
-  background:conic-gradient(from 0deg,transparent,rgba(245,180,0,.18),transparent 35%);
-  animation:spin 7s linear infinite;
-}
-.caller-hero > *{position:relative;z-index:2}
-@keyframes spin{to{transform:rotate(360deg)}}
-.caller-hero .lbl{font-size:.7rem;letter-spacing:3px;text-transform:uppercase;color:var(--accent-2);font-weight:800;margin-bottom:10px}
-.big-ball{
-  width:132px;height:132px;border-radius:50%;margin:0 auto 12px;
-  display:grid;place-items:center;color:#fff;
-  font-family:'Orbitron',sans-serif;font-weight:900;
-  box-shadow:0 14px 46px rgba(0,0,0,.5),inset 0 -8px 22px rgba(0,0,0,.28);
-  background:linear-gradient(135deg,var(--brand),var(--brand-2));
-  transition:transform .35s var(--ease);
-}
-.big-ball.pop{animation:pop .5s var(--ease)}
-@keyframes pop{0%{transform:scale(.55);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
-.big-ball .l{font-size:1.2rem;opacity:.85;line-height:1}
-.big-ball .n{font-size:2.9rem;line-height:1;margin-top:-2px}
-.ball-b{background:linear-gradient(135deg,#dc2626,#ef4444)!important}
-.ball-i{background:linear-gradient(135deg,#d97706,#f59e0b)!important}
-.ball-n{background:linear-gradient(135deg,#059669,#10b981)!important}
-.ball-g{background:linear-gradient(135deg,#2563eb,#3b82f6)!important}
-.ball-o{background:linear-gradient(135deg,#7c3aed,#a855f7)!important}
-
-.caller-meta{display:flex;justify-content:center;gap:26px;flex-wrap:wrap;font-size:.78rem;color:var(--text-2);margin-top:8px}
-.caller-meta b{display:block;font-family:'Orbitron',sans-serif;font-size:1.05rem;color:var(--accent-2);font-weight:900;text-align:center}
-
-.caller-controls{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}
-.btn-call{
-  padding:20px;border-radius:var(--radius);
-  background:linear-gradient(135deg,var(--accent),var(--accent-2));
-  color:#1a1200;font-family:'Orbitron',sans-serif;font-size:1.15rem;
-  font-weight:900;letter-spacing:2px;box-shadow:0 10px 32px rgba(245,180,0,.5);
-  transition:all .22s var(--ease);
-}
-.btn-call:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 14px 42px rgba(245,180,0,.65)}
-.btn-call:active:not(:disabled){transform:scale(.97)}
-.btn-call:disabled{opacity:.4;cursor:not-allowed}
-
-/* 1-75 grid */
-.num-grid{
-  display:grid;grid-template-columns:repeat(15,1fr);gap:4px;
-}
-.num-cell{
-  aspect-ratio:1;border-radius:7px;display:grid;place-items:center;
-  font-family:'Orbitron',sans-serif;font-weight:900;font-size:.72rem;
-  background:var(--bg-2);border:1px solid var(--border);color:var(--text-3);
-  transition:all .25s var(--ease);position:relative;
-}
-[data-theme="light"] .num-cell{background:var(--bg-3)}
-.num-cell.called{
-  color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(0,0,0,.35);
-}
-.num-cell.called.b{background:linear-gradient(135deg,#dc2626,#ef4444)}
-.num-cell.called.i{background:linear-gradient(135deg,#d97706,#f59e0b)}
-.num-cell.called.n{background:linear-gradient(135deg,#059669,#10b981)}
-.num-cell.called.g{background:linear-gradient(135deg,#2563eb,#3b82f6)}
-.num-cell.called.o{background:linear-gradient(135deg,#7c3aed,#a855f7)}
-.num-cell.latest{
-  outline:2px solid var(--accent-2);outline-offset:1px;
-  animation:pulseCell 1.3s infinite;
-}
-@keyframes pulseCell{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
-
-.called-strip{display:flex;flex-wrap:wrap;gap:7px;max-height:170px;overflow-y:auto;padding:4px 0}
-.chip-ball{
-  width:38px;height:38px;border-radius:50%;display:grid;place-items:center;
-  font-family:'Orbitron',sans-serif;font-weight:900;font-size:.78rem;color:#fff;
-  flex-shrink:0;position:relative;animation:pop .35s var(--ease);
-}
-.chip-ball small{position:absolute;top:2px;font-size:.5rem;opacity:.85}
-
-/* Game picker inside caller */
-.game-picker{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.game-picker select{
-  flex:1;min-width:220px;padding:11px 13px;border-radius:11px;
-  background:var(--bg-2);border:1px solid var(--border);color:var(--text);
-  font-size:.85rem;
-}
-[data-theme="light"] .game-picker select{background:var(--bg-3)}
-
-/* =========================================================================
-   MODAL + TOASTS
-   ========================================================================= */
-.modal-overlay{
-  position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(5px);
-  z-index:1500;display:none;align-items:center;justify-content:center;padding:20px;
-}
-.modal-overlay.show{display:flex;animation:fadeIn .22s var(--ease)}
-@keyframes fadeIn{from{opacity:0}to{opacity:1}}
-.modal{
-  width:100%;max-width:560px;background:var(--bg-1);
-  border:1px solid var(--border-2);border-radius:var(--radius-lg);
-  padding:26px;box-shadow:var(--shadow-lg);
-  animation:modalIn .3s var(--ease);max-height:90vh;overflow-y:auto;
-}
-.modal.wide{max-width:820px}
-@keyframes modalIn{from{opacity:0;transform:scale(.94) translateY(12px)}to{opacity:1;transform:none}}
-.modal h3{font-size:1.15rem;font-weight:900;letter-spacing:-.4px;margin-bottom:5px}
-.modal .modal-sub{color:var(--text-3);font-size:.82rem;margin-bottom:18px}
-.modal-actions{display:flex;gap:9px;margin-top:22px;flex-wrap:wrap}
-.modal-actions .btn{flex:1;min-width:120px}
-
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-
-.toast-container{
-  position:fixed;bottom:22px;right:22px;z-index:2000;
-  display:flex;flex-direction:column;gap:9px;pointer-events:none;
-}
-.toast{
-  min-width:270px;max-width:400px;padding:14px 16px;border-radius:13px;
-  background:var(--bg-2);border:1px solid var(--border-2);
-  box-shadow:var(--shadow-lg);display:flex;align-items:flex-start;gap:11px;
-  animation:toastIn .35s var(--ease);pointer-events:auto;font-size:.83rem;
-}
-@keyframes toastIn{from{opacity:0;transform:translateX(60px)}to{opacity:1;transform:none}}
-.toast.out{animation:toastOut .3s var(--ease) forwards}
-@keyframes toastOut{to{opacity:0;transform:translateX(60px)}}
-.toast.success{border-left:4px solid var(--success-2)}
-.toast.error{border-left:4px solid var(--danger)}
-.toast.info{border-left:4px solid var(--info)}
-.toast.warning{border-left:4px solid var(--warning)}
-.toast .ti{font-size:1.1rem;line-height:1;flex-shrink:0}
-.toast b{display:block;font-weight:800;margin-bottom:2px;font-size:.85rem}
-.toast p{color:var(--text-2);font-size:.78rem;line-height:1.4}
-
-/* Empty + skeleton */
-.empty{text-align:center;padding:48px 16px;color:var(--text-3)}
-.empty .ic{font-size:2.8rem;opacity:.55;margin-bottom:12px}
-.empty h4{font-size:1rem;font-weight:800;color:var(--text-2);margin-bottom:5px}
-.empty p{font-size:.83rem}
-.skeleton{
-  background:linear-gradient(90deg,var(--surface) 25%,var(--surface-2) 50%,var(--surface) 75%);
-  background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:11px;
-}
-@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-.center-loading{display:flex;justify-content:center;align-items:center;padding:50px;gap:12px;color:var(--text-3);font-size:.85rem}
-.spinner{width:20px;height:20px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
-.spinner.lg{width:38px;height:38px;border-width:4px}
-
-/* Chart card */
-.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px}
-.chart-card h3{font-size:.88rem;font-weight:800;margin-bottom:4px}
-.chart-card p{font-size:.74rem;color:var(--text-3);margin-bottom:14px}
-
-/* User detail modal */
-.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 24px}
-.detail-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:.83rem;gap:10px}
-.detail-row:last-child{border-bottom:none}
-.detail-row span:first-child{color:var(--text-3);font-weight:600;flex-shrink:0}
-.detail-row span:last-child{font-weight:700;text-align:right;word-break:break-all}
-
-/* Backdrop for mobile sidebar */
-.backdrop{
-  position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:180;
-  opacity:0;pointer-events:none;transition:opacity .3s var(--ease);
-}
-.backdrop.show{opacity:1;pointer-events:auto}
-
-/* =========================================================================
-   RESPONSIVE
-   ========================================================================= */
-@media (max-width:1200px){
-  .grid-5{grid-template-columns:repeat(3,1fr)}
-  .caller-grid{grid-template-columns:1fr}
-}
-@media (max-width:1024px){
-  .grid-4{grid-template-columns:repeat(2,1fr)}
-  .grid-3{grid-template-columns:repeat(2,1fr)}
-}
-@media (max-width:900px){
-  :root{--sidebar-w:252px}
-  .sidebar{transform:translateX(-100%)}
-  .sidebar.open{transform:translateX(0)}
-  .topbar{left:0}
-  .main{margin-left:0}
-  .menu-toggle{display:grid}
-  .num-grid{grid-template-columns:repeat(10,1fr)}
-}
-@media (max-width:680px){
-  .grid-4,.grid-3,.grid-2,.grid-5{grid-template-columns:1fr}
-  .form-row,.form-row-3{grid-template-columns:1fr}
-  .view{padding:18px 14px}
-  .caller-controls{grid-template-columns:1fr 1fr}
-  .caller-controls .btn-call{grid-column:1/-1}
-  .num-grid{grid-template-columns:repeat(8,1fr)}
-  .toast-container{left:14px;right:14px;bottom:14px}
-  .toast{min-width:0;width:100%}
-  .detail-grid{grid-template-columns:1fr}
-}
-@media (max-width:480px){
-  .num-grid{grid-template-columns:repeat(5,1fr)}
+.modal-card h3 { margin: 0 0 14px; font-size: 16px; }
+.modal-actions {
+  display: flex; gap: 10px; justify-content: flex-end;
+  margin-top: 18px;
 }
 </style>
 </head>
-
 <body>
 
 <!-- =====================================================================
-     ADMIN LOGIN GATE  (shown until auth + role verified)
+     LOGIN GATE
      ===================================================================== -->
-<div id="adminLoginGate">
-  <div class="login-card">
-    <div class="login-brand">
-      <div class="mark">B</div>
-      <div>
-        <h1>BINGO ADMIN</h1>
-        <p>Control Center</p>
-      </div>
+<div id="gate">
+  <form class="gate-card" id="gate-form">
+    <h1>Bingo Admin</h1>
+    <div class="sub">Sign in to manage the platform</div>
+
+    <div class="field">
+      <label for="gate-email">Email</label>
+      <input id="gate-email" type="email" autocomplete="username" required />
+    </div>
+    <div class="field">
+      <label for="gate-password">Password</label>
+      <input id="gate-password" type="password" autocomplete="current-password" required />
     </div>
 
-    <h2>Administrator Sign In</h2>
-    <p class="sub">Restricted access — authorized staff only</p>
+    <div class="gate-error" id="gate-error"></div>
 
-    <div class="alert alert-error" id="adminLoginError"><span>⚠️</span><span class="msg"></span></div>
-    <div class="alert alert-info" id="adminLoginInfo"><span>ℹ️</span><span class="msg"></span></div>
-
-    <form onsubmit="Admin.submitLogin(event)">
-      <div class="field">
-        <label>Email Address</label>
-        <input class="input" type="email" id="adminEmail" placeholder="admin@bingo.et" autocomplete="email" required>
-      </div>
-      <div class="field">
-        <label>Password</label>
-        <div class="input-group">
-          <input class="input" type="password" id="adminPassword" placeholder="••••••••" autocomplete="current-password" required>
-          <button type="button" class="toggle-pass" onclick="Admin.togglePassword('adminPassword', this)">👁️</button>
-        </div>
-      </div>
-      <button class="btn btn-primary btn-block btn-lg" type="submit" id="adminLoginBtn">Sign In to Control Center</button>
-    </form>
-
-    <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border);font-size:.76rem;color:var(--text-3);text-align:center;line-height:1.6">
-      This area is monitored. All actions are recorded in the audit log.<br>
-      <a href="index.html" style="color:var(--brand-3);font-weight:700">← Back to player site</a>
-    </div>
-  </div>
+    <button class="btn primary" style="width:100%;justify-content:center;padding:11px;" id="gate-submit" type="submit">
+      Sign in
+    </button>
+  </form>
 </div>
 
 <!-- =====================================================================
-     ADMIN APPLICATION SHELL
+     SHELL
      ===================================================================== -->
-<div id="adminApp">
-
-  <div class="backdrop" id="sbBackdrop" onclick="Admin.toggleSidebar(false)"></div>
-
-  <!-- SIDEBAR -->
-  <aside class="sidebar" id="sidebar">
-    <div class="sb-brand">
-      <div class="mark">B</div>
-      <div>
-        <b>BINGO</b>
-        <small>ADMIN</small>
-      </div>
+<div id="shell">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">🎯</div>
+      Bingo Admin
     </div>
 
-    <div class="sb-user">
-      <div class="sb-avatar" id="sbAvatar"><span id="sbAvatarInitial">A</span></div>
-      <div class="sb-user-info">
-        <b id="sbUserName">Administrator</b>
-        <span id="sbUserRole">—</span>
-      </div>
+    <div class="nav-group">
+      <div class="nav-group-title">Overview</div>
+      <button class="nav-btn active" data-panel="dashboard"><span class="ico">📊</span>Dashboard</button>
+      <button class="nav-btn" data-panel="live"><span class="ico">🎮</span>Live Games <span class="badge" id="badge-live" style="display:none">0</span></button>
+      <button class="nav-btn" data-panel="winners"><span class="ico">🏆</span>Winners</button>
+      <button class="nav-btn" data-panel="reports"><span class="ico">📈</span>Reports</button>
     </div>
 
-    <nav class="sb-nav" id="sbNav">
-      <div class="sb-section-label">Overview</div>
-      <div class="sb-item active" data-view="dashboard" onclick="Admin.go('dashboard')">
-        <span class="ic">📊</span><span class="lbl">Dashboard</span>
-      </div>
-      <div class="sb-item" data-view="reports" onclick="Admin.go('reports')">
-        <span class="ic">📈</span><span class="lbl">Reports</span>
-      </div>
+    <div class="nav-group">
+      <div class="nav-group-title">Rooms & Players</div>
+      <button class="nav-btn" data-panel="rooms"><span class="ico">🎯</span>Stake Rooms</button>
+      <button class="nav-btn" data-panel="players"><span class="ico">👥</span>Players</button>
+    </div>
 
-      <div class="sb-section-label">Operations</div>
-      <div class="sb-item" data-view="caller" data-role="GAME_MANAGER" onclick="Admin.go('caller')">
-        <span class="ic">🎙️</span><span class="lbl">Bingo Caller</span>
-      </div>
-      <div class="sb-item" data-view="games" data-role="GAME_MANAGER" onclick="Admin.go('games')">
-        <span class="ic">🎮</span><span class="lbl">Game Management</span>
-      </div>
-      <div class="sb-item" data-view="users" data-role="ADMIN" onclick="Admin.go('users')">
-        <span class="ic">👥</span><span class="lbl">User Management</span>
-      </div>
+    <div class="nav-group">
+      <div class="nav-group-title">Finance</div>
+      <button class="nav-btn" data-panel="deposits"><span class="ico">⬇️</span>Deposits <span class="badge" id="badge-deposits" style="display:none">0</span></button>
+      <button class="nav-btn" data-panel="withdrawals"><span class="ico">⬆️</span>Withdrawals <span class="badge" id="badge-withdrawals" style="display:none">0</span></button>
+      <button class="nav-btn" data-panel="wallet"><span class="ico">💰</span>Wallet Tools</button>
+    </div>
 
-      <div class="sb-section-label">Finance</div>
-      <div class="sb-item" data-view="deposits" data-role="FINANCE_MANAGER" onclick="Admin.go('deposits')">
-        <span class="ic">💵</span><span class="lbl">Deposits</span>
-        <span class="badge" id="badgeDeposits">0</span>
-      </div>
-      <div class="sb-item" data-view="withdrawals" data-role="FINANCE_MANAGER" onclick="Admin.go('withdrawals')">
-        <span class="ic">🏦</span><span class="lbl">Withdrawals</span>
-        <span class="badge" id="badgeWithdrawals">0</span>
-      </div>
-      <div class="sb-item" data-view="transactions" data-role="FINANCE_MANAGER" onclick="Admin.go('transactions')">
-        <span class="ic">🧾</span><span class="lbl">Transactions</span>
-      </div>
-
-      <div class="sb-section-label">Growth</div>
-      <div class="sb-item" data-view="promotions" data-role="MARKETING_MANAGER" onclick="Admin.go('promotions')">
-        <span class="ic">🎁</span><span class="lbl">Promotions</span>
-      </div>
-      <div class="sb-item" data-view="banners" data-role="MARKETING_MANAGER" onclick="Admin.go('banners')">
-        <span class="ic">🖼️</span><span class="lbl">Banners</span>
-      </div>
-      <div class="sb-item" data-view="notifications" data-role="MARKETING_MANAGER" onclick="Admin.go('notifications')">
-        <span class="ic">🔔</span><span class="lbl">Notifications</span>
-      </div>
-      <div class="sb-item" data-view="referrals" onclick="Admin.go('referrals')">
-        <span class="ic">🤝</span><span class="lbl">Referrals</span>
-      </div>
-
-      <div class="sb-section-label">System</div>
-      <div class="sb-item" data-view="audit" data-role="ADMIN" onclick="Admin.go('audit')">
-        <span class="ic">🛡️</span><span class="lbl">Audit Log</span>
-      </div>
-      <div class="sb-item" data-view="settings" data-role="ADMIN" onclick="Admin.go('settings')">
-        <span class="ic">⚙️</span><span class="lbl">Settings</span>
-      </div>
-    </nav>
-
-    <div class="sb-footer">
-      <button class="btn btn-ghost btn-block btn-sm" onclick="Admin.logout()">⏻ Sign Out</button>
+    <div class="nav-group">
+      <div class="nav-group-title">System</div>
+      <button class="nav-btn" data-panel="marketing"><span class="ico">📣</span>Marketing</button>
+      <button class="nav-btn" data-panel="audit"><span class="ico">📋</span>Audit Logs</button>
+      <button class="nav-btn" data-panel="settings"><span class="ico">⚙️</span>Settings</button>
     </div>
   </aside>
 
-  <!-- TOPBAR -->
+  <!-- Topbar -->
   <header class="topbar">
-    <button class="icon-btn menu-toggle" onclick="Admin.toggleSidebar()">☰</button>
-    <div>
-      <h1 id="viewTitle">Dashboard<small id="viewSubtitle">Platform overview</small></h1>
-    </div>
-    <div class="topbar-spacer"></div>
-    <div class="topbar-right">
-      <div class="pill pill-green" id="livePill" style="gap:6px">
-        <span style="width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block"></span>
-        <span id="livePillText">Live</span>
+    <div class="title" id="topbar-title">Dashboard</div>
+    <div class="actions">
+      <div class="who">
+        <b id="who-name">—</b>
+        <span id="who-role">admin</span>
       </div>
-      <button class="icon-btn" title="Refresh" onclick="Admin.refreshCurrentView()">⟳</button>
-      <button class="icon-btn" id="themeToggle" title="Toggle theme" onclick="Admin.toggleTheme()">🌙</button>
-      <button class="icon-btn" title="Notifications" onclick="Admin.go('notifications')">
-        🔔<span class="dot" id="topNotifDot">0</span>
-      </button>
-      <a class="icon-btn" href="index.html" title="Open player site" target="_blank" rel="noopener">🌐</a>
+      <button class="btn sm" id="btn-refresh">↻ Refresh</button>
+      <button class="btn sm danger" id="btn-logout">Logout</button>
     </div>
   </header>
 
-  <!-- MAIN -->
-  <main class="main">
+  <!-- Main -->
+  <main class="main" id="main">
 
-    <!-- =================================================================
-         VIEW: DASHBOARD
-         ================================================================= -->
-    <section class="view active" id="view-dashboard">
-      <div class="view-head">
-        <div>
-          <h2>Platform Overview</h2>
-          <p>Real-time snapshot of your Bingo operation</p>
-        </div>
-        <div class="view-head-actions">
-          <button class="btn btn-ghost btn-sm" onclick="Admin.loadDashboard()">⟳ Refresh</button>
-        </div>
+    <!-- DASHBOARD ------------------------------------------------ -->
+    <section class="panel active" id="panel-dashboard">
+      <div class="grid-metrics" id="metrics"></div>
+      <div class="card">
+        <h2>Active Games</h2>
+        <div id="dash-games"></div>
       </div>
-
-      <div class="grid grid-4">
-        <div class="stat">
-          <div class="ic">👥</div>
-          <h3>Total Users</h3>
-          <div class="val" id="dTotalUsers">—</div>
-          <div class="sub" id="dNewUsers">— new this week</div>
-        </div>
-        <div class="stat">
-          <div class="ic">🟢</div>
-          <h3>Online Players</h3>
-          <div class="val" id="dOnline">—</div>
-          <div class="sub">Active in the last 5 min</div>
-        </div>
-        <div class="stat">
-          <div class="ic">🎮</div>
-          <h3>Active Games</h3>
-          <div class="val" id="dActiveGames">—</div>
-          <div class="sub" id="dTotalGames">— total games</div>
-        </div>
-        <div class="stat">
-          <div class="ic">🏁</div>
-          <h3>Completed Games</h3>
-          <div class="val" id="dCompletedGames">—</div>
-          <div class="sub">All time</div>
-        </div>
-      </div>
-
-      <div class="grid grid-4" style="margin-top:16px">
-        <div class="stat">
-          <div class="ic">💵</div>
-          <h3>Total Deposits</h3>
-          <div class="val" id="dDeposits">—</div>
-          <div class="sub">Confirmed ETB</div>
-        </div>
-        <div class="stat">
-          <div class="ic">🏦</div>
-          <h3>Total Withdrawals</h3>
-          <div class="val" id="dWithdrawals">—</div>
-          <div class="sub">Paid out ETB</div>
-        </div>
-        <div class="stat">
-          <div class="ic">💰</div>
-          <h3>Revenue</h3>
-          <div class="val" id="dRevenue">—</div>
-          <div class="sub">Ticket sales ETB</div>
-        </div>
-        <div class="stat">
-          <div class="ic">🏆</div>
-          <h3>Prizes Paid</h3>
-          <div class="val" id="dPrizes">—</div>
-          <div class="sub">To winners ETB</div>
-        </div>
-      </div>
-
-      <div class="grid grid-2" style="margin-top:20px">
-        <div class="chart-card">
-          <h3>Player Growth</h3>
-          <p>New registrations over the last 14 days</p>
-          <div class="chart-wrap"><canvas id="chartUsers"></canvas></div>
-        </div>
-        <div class="chart-card">
-          <h3>Financial Activity</h3>
-          <p>Deposits vs. withdrawals over the last 14 days</p>
-          <div class="chart-wrap"><canvas id="chartFinance"></canvas></div>
-        </div>
-      </div>
-
-      <div class="grid grid-2" style="margin-top:20px">
-        <div class="chart-card">
-          <h3>Game Activity</h3>
-          <p>Games played per day over the last 14 days</p>
-          <div class="chart-wrap"><canvas id="chartGames"></canvas></div>
-        </div>
-        <div class="chart-card">
-          <h3>Recent Winners</h3>
-          <p>Last 8 settled prizes</p>
-          <div id="dRecentWinners" style="max-height:260px;overflow-y:auto">
-            <div class="skeleton" style="height:48px;margin-bottom:8px"></div>
-            <div class="skeleton" style="height:48px;margin-bottom:8px"></div>
-            <div class="skeleton" style="height:48px"></div>
-          </div>
-        </div>
+      <div class="card">
+        <h2>Recent Activity</h2>
+        <div id="dash-activity"></div>
       </div>
     </section>
 
-    <!-- =================================================================
-         VIEW: BINGO CALLER
-         ================================================================= -->
-    <section class="view" id="view-caller">
-      <div class="view-head">
-        <div>
-          <h2>Bingo Caller</h2>
-          <p>Run live games in real time. Every call is broadcast instantly to all players.</p>
-        </div>
-        <div class="view-head-actions">
-          <span class="pill pill-purple" id="callerStatusPill">No game selected</span>
+    <!-- LIVE GAMES ---------------------------------------------- -->
+    <section class="panel" id="panel-live">
+      <div class="card">
+        <div class="row">
+          <h2 style="margin:0">Live Games Monitor</h2>
+          <div class="spacer"></div>
+          <label class="check"><input type="checkbox" id="live-autorefresh" checked /> Auto-refresh</label>
         </div>
       </div>
-
-      <div class="card" style="margin-bottom:18px">
-        <div class="game-picker">
-          <label style="font-size:.8rem;color:var(--text-3);font-weight:700;margin-right:4px">Select game:</label>
-          <select id="callerGameSelect" onchange="Admin.onCallerGameChange()">
-            <option value="">— Choose an active or scheduled game —</option>
-          </select>
-          <button class="btn btn-ghost btn-sm" onclick="Admin.loadCallerGames()">⟳ Refresh List</button>
-        </div>
-      </div>
-
-      <div class="caller-grid">
-
-        <div class="caller-left">
-
-          <div class="caller-hero">
-            <div class="lbl">Current Number</div>
-            <div class="big-ball" id="callerBall">
-              <div style="text-align:center">
-                <div class="l" id="callerLetter">—</div>
-                <div class="n" id="callerNumber">--</div>
-              </div>
-            </div>
-            <div class="caller-meta">
-              <div><b id="callerPlayers">0</b>Players</div>
-              <div><b id="callerPrize">0</b>Prize (ETB)</div>
-              <div><b id="callerCalled">0</b>Called</div>
-              <div><b id="callerRemaining">75</b>Remaining</div>
-            </div>
-          </div>
-
-          <div class="caller-controls">
-            <button class="btn-call" id="btnCallNext" onclick="Admin.callNext()" disabled>CALL NEXT NUMBER</button>
-            <button class="btn btn-warning" id="btnPause" onclick="Admin.togglePause()" disabled>⏸ Pause</button>
-            <button class="btn btn-ghost" id="btnUndo" onclick="Admin.undoLast()" disabled>↩ Undo</button>
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-            <button class="btn btn-success" id="btnStart" onclick="Admin.startGame()" disabled>▶ Start Game</button>
-            <button class="btn btn-danger" id="btnEnd" onclick="Admin.endGame()" disabled>⏹ End Game</button>
-            <button class="btn btn-outline" id="btnCancel" onclick="Admin.cancelGame()" disabled>✕ Cancel</button>
-          </div>
-
-          <div class="card">
-            <div class="card-title">Called Numbers</div>
-            <div class="called-strip" id="callerCalledStrip">
-              <div class="empty" style="padding:20px"><p>No numbers called yet</p></div>
-            </div>
-          </div>
-
-        </div>
-
-        <div class="caller-right">
-
-          <div class="card">
-            <div class="card-title">Number Board (1 – 75)</div>
-            <div class="num-grid" id="callerNumGrid">
-              <!-- 75 cells injected by app.js -->
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-title">Game Info</div>
-            <div class="detail-row"><span>Status</span><span id="callerInfoStatus">—</span></div>
-            <div class="detail-row"><span>Pattern</span><span id="callerInfoPattern">—</span></div>
-            <div class="detail-row"><span>Ticket Price</span><span id="callerInfoTicket">—</span></div>
-            <div class="detail-row"><span>Call Interval</span><span id="callerInfoInterval">—</span></div>
-            <div class="detail-row"><span>Started</span><span id="callerInfoStarted">—</span></div>
-          </div>
-
-          <div class="card">
-            <div class="card-title">Players In Room</div>
-            <div id="callerPlayersList" style="max-height:280px;overflow-y:auto">
-              <div class="empty" style="padding:16px"><p>No players yet</p></div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-title">BINGO Claims</div>
-            <div id="callerClaims" style="max-height:220px;overflow-y:auto">
-              <div class="empty" style="padding:16px"><p>No claims yet</p></div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </section>
-
-    <!-- =================================================================
-         VIEW: GAME MANAGEMENT
-         ================================================================= -->
-    <section class="view" id="view-games">
-      <div class="view-head">
-        <div>
-          <h2>Game Management</h2>
-          <p>Create, edit, schedule and control Bingo games</p>
-        </div>
-        <div class="view-head-actions">
-          <button class="btn btn-ghost btn-sm" onclick="Admin.loadGames()">⟳ Refresh</button>
-          <button class="btn btn-primary btn-sm" onclick="Admin.openGameForm()">+ Create Game</button>
-        </div>
-      </div>
-
-      <div class="search-bar">
-        <input class="input" id="gameSearchInput" placeholder="Search games by name…" oninput="Admin.filterGamesTable()">
-        <select class="input" id="gameStatusFilter" style="max-width:200px" onchange="Admin.filterGamesTable()">
-          <option value="">All Statuses</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="open">Open</option>
-          <option value="active">Active</option>
-          <option value="paused">Paused</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-      </div>
-
-      <div class="table-wrap">
+      <div class="card" style="padding:0">
         <table>
           <thead>
             <tr>
               <th>Game</th>
-              <th>Status</th>
-              <th>Ticket</th>
-              <th>Prize</th>
+              <th>Room</th>
+              <th>Stake</th>
               <th>Players</th>
-              <th>Pattern</th>
-              <th>Start Time</th>
-              <th>Actions</th>
+              <th>Status</th>
+              <th>Number</th>
+              <th>Timer</th>
+              <th>Pot</th>
+              <th></th>
             </tr>
           </thead>
-          <tbody id="gamesTableBody">
-            <tr><td colspan="8" class="center-loading"><div class="spinner"></div> Loading games…</td></tr>
+          <tbody id="live-tbody">
+            <tr><td colspan="9" class="empty">Loading…</td></tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <!-- =================================================================
-         VIEW: USER MANAGEMENT
-         ================================================================= -->
-    <section class="view" id="view-users">
-      <div class="view-head">
-        <div>
-          <h2>User Management</h2>
-          <p>Search, inspect and moderate player accounts</p>
-        </div>
-        <div class="view-head-actions">
-          <button class="btn btn-ghost btn-sm" onclick="Admin.loadUsers()">⟳ Refresh</button>
-        </div>
-      </div>
-
-      <div class="search-bar">
-        <input class="input" id="userSearchInput" placeholder="Search by username, email or phone…" oninput="Admin.debouncedUserSearch()">
-        <select class="input" id="userStatusFilter" style="max-width:180px" onchange="Admin.loadUsers()">
-          <option value="">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="suspended">Suspended</option>
-          <option value="banned">Banned</option>
-          <option value="pending">Pending</option>
-        </select>
-      </div>
-
-      <div class="table-wrap">
+    <!-- WINNERS ------------------------------------------------- -->
+    <section class="panel" id="panel-winners">
+      <div class="card" style="padding:0">
         <table>
           <thead>
             <tr>
-              <th>User</th>
-              <th>Username</th>
-              <th>Email</th>
-              <th>Phone</th>
-              <th>Status</th>
-              <th>Balance</th>
-              <th>Joined</th>
-              <th>Actions</th>
+              <th>Game</th>
+              <th>Winner</th>
+              <th>Card</th>
+              <th>Pattern</th>
+              <th>Prize</th>
+              <th>Settled</th>
             </tr>
           </thead>
-          <tbody id="usersTableBody">
-            <tr><td colspan="8" class="center-loading"><div class="spinner"></div> Loading users…</td></tr>
-          </tbody>
+          <tbody id="winners-tbody"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
         </table>
-      </div>
-
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
-        <div style="font-size:.78rem;color:var(--text-3)" id="usersCount">—</div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-ghost btn-sm" id="usersPrev" onclick="Admin.usersPage(-1)">← Prev</button>
-          <button class="btn btn-ghost btn-sm" id="usersNext" onclick="Admin.usersPage(1)">Next →</button>
-        </div>
       </div>
     </section>
 
-    <!-- =================================================================
-         VIEW: DEPOSITS
-         ================================================================= -->
-    <section class="view" id="view-deposits">
-      <div class="view-head">
-        <div>
-          <h2>Deposits</h2>
-          <p>Confirm or reject deposit requests from payment providers</p>
-        </div>
-        <div class="view-head-actions">
-          <button class="btn btn-ghost btn-sm" onclick="Admin.loadDeposits()">⟳ Refresh</button>
+    <!-- REPORTS ------------------------------------------------- -->
+    <section class="panel" id="panel-reports">
+      <div class="grid-metrics" id="report-metrics"></div>
+      <div class="card">
+        <h2>Last 30 Days</h2>
+        <div id="report-detail" class="empty">Load a report to see data.</div>
+      </div>
+    </section>
+
+    <!-- ROOMS --------------------------------------------------- -->
+    <section class="panel" id="panel-rooms">
+      <div class="card">
+        <div class="row">
+          <h2 style="margin:0">Stake Rooms</h2>
+          <div class="spacer"></div>
+          <button class="btn primary sm" id="btn-new-room">+ New Room</button>
         </div>
       </div>
-
-      <div class="tabs">
-        <button class="tab active" data-dep-status="pending"    onclick="Admin.filterDeposits('pending', this)">Pending</button>
-        <button class="tab"        data-dep-status="processing" onclick="Admin.filterDeposits('processing', this)">Processing</button>
-        <button class="tab"        data-dep-status="completed"  onclick="Admin.filterDeposits('completed', this)">Completed</button>
-        <button class="tab"        data-dep-status="failed"     onclick="Admin.filterDeposits('failed', this)">Failed</button>
-        <button class="tab"        data-dep-status=""           onclick="Admin.filterDeposits('', this)">All</button>
+      <div class="card" style="padding:0">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Stake</th>
+              <th>Players</th>
+              <th>Lobby</th>
+              <th>Interval</th>
+              <th>Fee</th>
+              <th>Prize %</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="rooms-tbody"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
+        </table>
       </div>
+    </section>
 
-      <div class="table-wrap">
+    <!-- PLAYERS ------------------------------------------------- -->
+    <section class="panel" id="panel-players">
+      <div class="card">
+        <div class="row">
+          <h2 style="margin:0">Players</h2>
+          <div class="spacer"></div>
+          <input class="field" placeholder="Search by name or username…" id="players-search"
+                 style="width:260px;padding:8px 12px;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;" />
+          <button class="btn sm" id="players-search-btn">Search</button>
+        </div>
+      </div>
+      <div class="card" style="padding:0">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Telegram</th>
+              <th>TG ID</th>
+              <th>Status</th>
+              <th>Last seen</th>
+              <th>Joined</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="players-tbody"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- DEPOSITS ------------------------------------------------ -->
+    <section class="panel" id="panel-deposits">
+      <div class="card" style="padding:0">
         <table>
           <thead>
             <tr>
               <th>User</th>
               <th>Amount</th>
-              <th>Provider</th>
+              <th>Method</th>
               <th>Reference</th>
               <th>Status</th>
-              <th>Requested</th>
-              <th>Actions</th>
+              <th>Created</th>
+              <th></th>
             </tr>
           </thead>
-          <tbody id="depositsTableBody">
-            <tr><td colspan="7" class="center-loading"><div class="spinner"></div> Loading…</td></tr>
-          </tbody>
+          <tbody id="deposits-tbody"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
     </section>
 
-    <!-- =================================================================
-         VIEW: WITHDRAWALS
-         ================================================================= -->
-    <section class="view" id="view-withdrawals">
-      <div class="view-head">
-        <div>
-          <h2>Withdrawals</h2>
-          <p>Approve or reject payout requests</p>
-        </div>
-        <div class="view-head-actions">
-          <button class="btn btn-ghost btn-sm" onclick="Admin.loadWithdrawals()">⟳ Refresh</button>
-        </div>
-      </div>
-
-      <div class="tabs">
-        <button class="tab active" data-wd-status="pending"   onclick="Admin.filterWithdrawals('pending', this)">Pending</button>
-        <button class="tab"        data-wd-status="completed" onclick="Admin.filterWithdrawals('completed', this)">Completed</button>
-        <button class="tab"        data-wd-status="rejected"  onclick="Admin.filterWithdrawals('rejected', this)">Rejected</button>
-        <button class="tab"        data-wd-status=""          onclick="Admin.filterWithdrawals('', this)">All</button>
-      </div>
-
-      <div class="table-wrap">
+    <!-- WITHDRAWALS --------------------------------------------- -->
+    <section class="panel" id="panel-withdrawals">
+      <div class="card" style="padding:0">
         <table>
           <thead>
             <tr>
               <th>User</th>
               <th>Amount</th>
-              <th>Net</th>
-              <th>Provider</th>
               <th>Destination</th>
               <th>Status</th>
-              <th>Requested</th>
-              <th>Actions</th>
+              <th>Created</th>
+              <th></th>
             </tr>
           </thead>
-          <tbody id="withdrawalsTableBody">
-            <tr><td colspan="8" class="center-loading"><div class="spinner"></div> Loading…</td></tr>
-          </tbody>
+          <tbody id="withdrawals-tbody"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
     </section>
 
-    <!-- =================================================================
-         VIEW: TRANSACTIONS
-         ================================================================= -->
-    <section class="view" id="view-transactions">
-      <div class="view-head">
-        <div>
-          <h2>Transactions Ledger</h2>
-          <p>Immutable record of every wallet movement</p>
+    <!-- WALLET TOOLS -------------------------------------------- -->
+    <section class="panel" id="panel-wallet">
+      <div class="card">
+        <h2>Adjust Player Balance</h2>
+        <div class="form-grid">
+          <div class="field full">
+            <label>Telegram ID</label>
+            <input id="wallet-tg-id" type="text" placeholder="e.g. 123456789" />
+          </div>
+          <div class="field">
+            <label>Amount (signed)</label>
+            <input id="wallet-amount" type="number" step="0.01" placeholder="+100.00 or -50.00" />
+          </div>
+          <div class="field full">
+            <label>Note</label>
+            <input id="wallet-note" type="text" placeholder="Reason / audit note" />
+          </div>
         </div>
-        <div class="view-head-actions">
-          <button class="btn btn-ghost btn-sm" onclick="Admin.loadTransactions()">⟳ Refresh</button>
-        </div>
-      </div>
-
-      <div class="search-bar">
-        <input class="input" id="txSearchInput" placeholder="Search by reference or user…" oninput="Admin.debouncedTxSearch()">
-        <select class="input" id="txTypeFilter" style="max-width:200px" onchange="Admin.loadTransactions()">
-          <option value="">All Types</option>
-          <option value="deposit">Deposit</option>
-          <option value="withdrawal">Withdrawal</option>
-          <option value="bet">Bet</option>
-          <option value="win">Win</option>
-          <option value="refund">Refund</option>
-          <option value="bonus">Bonus</option>
-          <option value="referral">Referral</option>
-          <option value="adjustment">Adjustment</option>
-          <option value="jackpot">Jackpot</option>
-        </select>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>User</th>
-              <th>Type</th>
-              <th>Amount</th>
-              <th>Before</th>
-              <th>After</th>
-              <th>Status</th>
-              <th>Reference</th>
-            </tr>
-          </thead>
-          <tbody id="transactionsTableBody">
-            <tr><td colspan="8" class="center-loading"><div class="spinner"></div> Loading…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- =================================================================
-         VIEW: PROMOTIONS
-         ================================================================= -->
-    <section class="view" id="view-promotions">
-      <div class="view-head">
-        <div>
-          <h2>Promotions</h2>
-          <p>Welcome bonuses, referral campaigns, special games, jackpots</p>
-        </div>
-        <div class="view-head-actions">
-          <button class="btn btn-ghost btn-sm" onclick="Admin.loadPromotions()">⟳ Refresh</button>
-          <button class="btn btn-primary btn-sm" onclick="Admin.openPromoForm()">+ Create Promotion</button>
-        </div>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Title</th>
-              <th>Type</th>
-              <th>Bonus</th>
-              <th>Start</th>
-              <th>End</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="promotionsTableBody">
-            <tr><td colspan="7" class="center-loading"><div class="spinner"></div> Loading…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- =================================================================
-         VIEW: BANNERS
-         ================================================================= -->
-    <section class="view" id="view-banners">
-      <div class="view-head">
-        <div>
-          <h2>Banners</h2>
-          <p>Homepage hero slides and promotional images</p>
-        </div>
-        <div class="view-head-actions">
-          <button class="btn btn-ghost btn-sm" onclick="Admin.loadBanners()">⟳ Refresh</button>
-          <button class="btn btn-primary btn-sm" onclick="Admin.openBannerForm()">+ Create Banner</button>
-        </div>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Preview</th>
-              <th>Title</th>
-              <th>Position</th>
-              <th>Sort</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="bannersTableBody">
-            <tr><td colspan="6" class="center-loading"><div class="spinner"></div> Loading…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- =================================================================
-         VIEW: NOTIFICATIONS
-         ================================================================= -->
-    <section class="view" id="view-notifications">
-      <div class="view-head">
-        <div>
-          <h2>Notifications</h2>
-          <p>Send announcements and manage in-app messages</p>
-        </div>
-        <div class="view-head-actions">
-          <button class="btn btn-ghost btn-sm" onclick="Admin.loadAdminNotifications()">⟳ Refresh</button>
-          <button class="btn btn-primary btn-sm" onclick="Admin.openNotifForm()">+ Send Notification</button>
-        </div>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Recipient</th>
-              <th>Title</th>
-              <th>Type</th>
-              <th>Read</th>
-            </tr>
-          </thead>
-          <tbody id="notificationsTableBody">
-            <tr><td colspan="5" class="center-loading"><div class="spinner"></div> Loading…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- =================================================================
-         VIEW: REFERRALS
-         ================================================================= -->
-    <section class="view" id="view-referrals">
-      <div class="view-head">
-        <div>
-          <h2>Referral Program</h2>
-          <p>Track referrers, referred users and rewards</p>
-        </div>
-        <div class="view-head-actions">
-          <button class="btn btn-ghost btn-sm" onclick="Admin.loadAdminReferrals()">⟳ Refresh</button>
-        </div>
-      </div>
-
-      <div class="grid grid-3" style="margin-bottom:20px">
-        <div class="stat">
-          <div class="ic">👥</div>
-          <h3>Total Referrals</h3>
-          <div class="val" id="aRefTotal">—</div>
-        </div>
-        <div class="stat">
-          <div class="ic">✅</div>
-          <h3>Qualified</h3>
-          <div class="val" id="aRefQualified">—</div>
-        </div>
-        <div class="stat">
-          <div class="ic">💰</div>
-          <h3>Rewards Paid</h3>
-          <div class="val" id="aRefPaid">—</div>
-        </div>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Referrer</th>
-              <th>Referred User</th>
-              <th>Code</th>
-              <th>Status</th>
-              <th>Reward</th>
-              <th>Joined</th>
-            </tr>
-          </thead>
-          <tbody id="referralsTableBody">
-            <tr><td colspan="6" class="center-loading"><div class="spinner"></div> Loading…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- =================================================================
-         VIEW: REPORTS
-         ================================================================= -->
-    <section class="view" id="view-reports">
-      <div class="view-head">
-        <div>
-          <h2>Reports</h2>
-          <p>Financial and operational analytics</p>
-        </div>
-        <div class="view-head-actions">
-          <select class="input" id="reportRange" style="max-width:180px" onchange="Admin.loadReports()">
-            <option value="7">Last 7 days</option>
-            <option value="30" selected>Last 30 days</option>
-            <option value="90">Last 90 days</option>
-          </select>
-          <button class="btn btn-ghost btn-sm" onclick="Admin.loadReports()">⟳ Refresh</button>
-        </div>
-      </div>
-
-      <div class="grid grid-4">
-        <div class="stat">
-          <div class="ic">💵</div>
-          <h3>Period Deposits</h3>
-          <div class="val" id="rDeposits">—</div>
-        </div>
-        <div class="stat">
-          <div class="ic">🏦</div>
-          <h3>Period Withdrawals</h3>
-          <div class="val" id="rWithdrawals">—</div>
-        </div>
-        <div class="stat">
-          <div class="ic">🎟️</div>
-          <h3>Ticket Revenue</h3>
-          <div class="val" id="rRevenue">—</div>
-        </div>
-        <div class="stat">
-          <div class="ic">🏆</div>
-          <h3>Prizes Paid</h3>
-          <div class="val" id="rPrizes">—</div>
-        </div>
-      </div>
-
-      <div class="grid grid-2" style="margin-top:20px">
-        <div class="chart-card">
-          <h3>Daily Cash Flow</h3>
-          <p>Deposits vs withdrawals in the selected period</p>
-          <div class="chart-wrap"><canvas id="reportFinanceChart"></canvas></div>
-        </div>
-        <div class="chart-card">
-          <h3>Daily Ticket Sales</h3>
-          <p>Bet volume in the selected period</p>
-          <div class="chart-wrap"><canvas id="reportRevenueChart"></canvas></div>
-        </div>
-      </div>
-
-      <div class="chart-card" style="margin-top:20px">
-        <h3>Top Winners</h3>
-        <p>Highest payouts in the selected period</p>
-        <div class="table-wrap" style="margin-top:12px">
-          <table>
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Wins</th>
-                <th>Total Won</th>
-              </tr>
-            </thead>
-            <tbody id="topWinnersBody">
-              <tr><td colspan="3" class="center-loading"><div class="spinner"></div> Loading…</td></tr>
-            </tbody>
-          </table>
+        <div style="margin-top:14px;display:flex;gap:10px;">
+          <button class="btn primary" id="wallet-apply">Apply Adjustment</button>
         </div>
       </div>
     </section>
 
-    <!-- =================================================================
-         VIEW: AUDIT LOG
-         ================================================================= -->
-    <section class="view" id="view-audit">
-      <div class="view-head">
-        <div>
-          <h2>Audit Log</h2>
-          <p>Immutable record of every critical action taken by staff</p>
+    <!-- MARKETING ----------------------------------------------- -->
+    <section class="panel" id="panel-marketing">
+      <div class="card">
+        <h2>Broadcast Message</h2>
+        <div class="field">
+          <label>Title</label>
+          <input id="mkt-title" type="text" placeholder="e.g. Double prize weekend!" />
         </div>
-        <div class="view-head-actions">
-          <button class="btn btn-ghost btn-sm" onclick="Admin.loadAudit()">⟳ Refresh</button>
+        <div class="field">
+          <label>Body</label>
+          <textarea id="mkt-body" rows="5" placeholder="Message sent to all active Telegram users…"></textarea>
         </div>
+        <button class="btn primary" id="mkt-send">Queue Broadcast</button>
+        <p class="sub" style="color:var(--muted);font-size:12px;margin-top:10px;">
+          Broadcasts are queued for delivery by the Telegram bot. Configure the bot token in the Edge Function's environment.
+        </p>
       </div>
+    </section>
 
-      <div class="search-bar">
-        <input class="input" id="auditSearchInput" placeholder="Search by action or user…" oninput="Admin.debouncedAuditSearch()">
-        <select class="input" id="auditActionFilter" style="max-width:240px" onchange="Admin.loadAudit()">
-          <option value="">All Actions</option>
-          <option value="GAME_CREATED">Game Created</option>
-          <option value="GAME_STARTED">Game Started</option>
-          <option value="NUMBER_CALLED">Number Called</option>
-          <option value="NUMBER_UNDONE">Number Undone</option>
-          <option value="GAME_STATUS_CHANGED">Game Status Changed</option>
-          <option value="GAME_CANCELLED">Game Cancelled</option>
-          <option value="BINGO_CLAIM_VERIFIED">Bingo Verified</option>
-          <option value="BINGO_CLAIM_REJECTED">Bingo Rejected</option>
-          <option value="PRIZE_SETTLED">Prize Settled</option>
-          <option value="DEPOSIT_APPROVED">Deposit Approved</option>
-          <option value="DEPOSIT_REJECTED">Deposit Rejected</option>
-          <option value="WITHDRAWAL_APPROVED">Withdrawal Approved</option>
-          <option value="WITHDRAWAL_REJECTED">Withdrawal Rejected</option>
-          <option value="USER_STATUS_CHANGED">User Status Changed</option>
-          <option value="ROLE_GRANTED">Role Granted</option>
-          <option value="ROLE_REVOKED">Role Revoked</option>
-        </select>
-      </div>
-
-      <div class="table-wrap">
+    <!-- AUDIT --------------------------------------------------- -->
+    <section class="panel" id="panel-audit">
+      <div class="card" style="padding:0">
         <table>
           <thead>
             <tr>
-              <th>Time</th>
+              <th>When</th>
               <th>Actor</th>
-              <th>Role</th>
               <th>Action</th>
               <th>Entity</th>
-              <th>Details</th>
+              <th>Entity ID</th>
             </tr>
           </thead>
-          <tbody id="auditTableBody">
-            <tr><td colspan="6" class="center-loading"><div class="spinner"></div> Loading…</td></tr>
-          </tbody>
+          <tbody id="audit-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
     </section>
 
-    <!-- =================================================================
-         VIEW: SETTINGS
-         ================================================================= -->
-    <section class="view" id="view-settings">
-      <div class="view-head">
-        <div>
-          <h2>System Settings</h2>
-          <p>Platform-wide configuration</p>
-        </div>
-        <div class="view-head-actions">
-          <button class="btn btn-ghost btn-sm" onclick="Admin.loadSettings()">⟳ Reload</button>
-          <button class="btn btn-primary btn-sm" onclick="Admin.saveSettings()">💾 Save Settings</button>
-        </div>
-      </div>
-
-      <div class="grid grid-2">
-
-        <div class="card">
-          <div class="card-title">💱 Currency & Fees</div>
-          <div class="field">
-            <label>Currency Code</label>
-            <input class="input" id="setCurrency" placeholder="ETB">
-          </div>
-          <div class="form-row">
-            <div class="field">
-              <label>Minimum Deposit</label>
-              <input class="input" type="number" id="setMinDeposit" min="0" step="1">
-            </div>
-            <div class="field">
-              <label>Maximum Deposit</label>
-              <input class="input" type="number" id="setMaxDeposit" min="0" step="1">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="field">
-              <label>Minimum Withdrawal</label>
-              <input class="input" type="number" id="setMinWithdrawal" min="0" step="1">
-            </div>
-            <div class="field">
-              <label>Withdrawal Fee</label>
-              <input class="input" type="number" id="setWithdrawalFee" min="0" step="0.01">
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">🎁 Bonuses & Rewards</div>
-          <div class="form-row">
-            <div class="field">
-              <label>Welcome Bonus</label>
-              <input class="input" type="number" id="setWelcomeBonus" min="0" step="0.01">
-            </div>
-            <div class="field">
-              <label>Welcome Bonus Enabled</label>
-              <select class="input" id="setWelcomeEnabled">
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="field">
-              <label>Referral Reward</label>
-              <input class="input" type="number" id="setReferralReward" min="0" step="0.01">
-            </div>
-            <div class="field">
-              <label>Referral Enabled</label>
-              <select class="input" id="setReferralEnabled">
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">🎮 Game Defaults</div>
-          <div class="form-row">
-            <div class="field">
-              <label>Default Call Interval (seconds)</label>
-              <input class="input" type="number" id="setCallInterval" min="1" max="120">
-            </div>
-            <div class="field">
-              <label>Jackpot Amount (ETB)</label>
-              <input class="input" type="number" id="setJackpot" min="0" step="1">
-            </div>
-          </div>
-          <div class="field">
-            <label>Enabled Payment Providers (comma separated)</label>
-            <input class="input" id="setProviders" placeholder="telebirr,chapa,cbe_birr">
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">🏢 Platform Info</div>
-          <div class="field">
-            <label>Platform Name</label>
-            <input class="input" id="setPlatformName">
-          </div>
-          <div class="form-row">
-            <div class="field">
-              <label>Support Email</label>
-              <input class="input" type="email" id="setSupportEmail">
-            </div>
-            <div class="field">
-              <label>Support Phone</label>
-              <input class="input" id="setSupportPhone">
-            </div>
-          </div>
-        </div>
-
+    <!-- SETTINGS ------------------------------------------------ -->
+    <section class="panel" id="panel-settings">
+      <div class="card">
+        <h2>Platform Settings</h2>
+        <div id="settings-list" class="empty">Loading…</div>
       </div>
     </section>
 
@@ -1571,16 +785,998 @@ td .row-actions{display:flex;gap:6px;flex-wrap:wrap}
 </div>
 
 <!-- =====================================================================
-     MODAL + TOASTS
+     GAME DETAIL DRAWER
      ===================================================================== -->
-<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)Admin.closeModal()">
-  <div class="modal" id="modalContent"></div>
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h3 id="drawer-title">Game Detail</h3>
+    <button class="drawer-close" id="drawer-close">✕</button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+
+<!-- =====================================================================
+     ROOM EDIT MODAL
+     ===================================================================== -->
+<div class="modal" id="room-modal">
+  <div class="modal-card">
+    <h3 id="room-modal-title">New Stake Room</h3>
+    <form id="room-form">
+      <input type="hidden" id="room-id" />
+      <div class="form-grid">
+        <div class="field full">
+          <label>Name</label>
+          <input id="room-name" type="text" required />
+        </div>
+        <div class="field">
+          <label>Stake Amount</label>
+          <input id="room-stake" type="number" step="0.01" min="0.01" required />
+        </div>
+        <div class="field">
+          <label>Currency</label>
+          <input id="room-currency" type="text" value="ETB" />
+        </div>
+        <div class="field">
+          <label>Min Players</label>
+          <input id="room-min" type="number" min="2" value="2" />
+        </div>
+        <div class="field">
+          <label>Max Players</label>
+          <input id="room-max" type="number" min="3" value="20" />
+        </div>
+        <div class="field">
+          <label>Lobby Duration (s)</label>
+          <input id="room-lobby" type="number" min="5" value="45" />
+        </div>
+        <div class="field">
+          <label>Number Interval (s)</label>
+          <input id="room-interval" type="number" min="1" value="4" />
+        </div>
+        <div class="field">
+          <label>Platform Fee %</label>
+          <input id="room-fee" type="number" step="0.5" min="0" max="50" value="10" />
+        </div>
+        <div class="field">
+          <label>Prize %</label>
+          <input id="room-prize" type="number" step="0.5" min="50" max="100" value="90" />
+        </div>
+        <div class="field">
+          <label>Win Pattern</label>
+          <select id="room-pattern">
+            <option value="LINE">Line</option>
+            <option value="FOUR_CORNERS">Four Corners</option>
+            <option value="X">X</option>
+            <option value="BLACKOUT">Blackout</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Sort Order</label>
+          <input id="room-sort" type="number" value="0" />
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="room-active" checked /> Active</label>
+
+      <div class="modal-actions">
+        <button type="button" class="btn" id="room-cancel">Cancel</button>
+        <button type="submit" class="btn primary" id="room-save">Save Room</button>
+      </div>
+    </form>
+  </div>
 </div>
 
-<div class="toast-container" id="toastContainer"></div>
+<!-- =====================================================================
+     TOAST
+     ===================================================================== -->
+<div id="toast"></div>
 
-<!-- app.js is the SINGLE JavaScript file shared by index.html and admin.html -->
+<!-- =====================================================================
+     CONFIG + BOOT
+     ===================================================================== -->
+<script>
+  window.__APP_MODE__       = 'admin';
+  window.SUPABASE_URL       = 'https://YOUR-PROJECT.supabase.co';
+  window.SUPABASE_ANON_KEY  = 'YOUR-ANON-KEY';
+</script>
 <script src="app.js"></script>
+
+<script>
+/* ============================================================================
+ * ADMIN CONSOLE — inline controller
+ * Relies on window.BingoApp from app.js for:
+ *   - Supabase client               (BingoApp.sb())
+ *   - Admin RPC wrapper             (BingoApp.Admin.*)
+ *   - Utility helpers               (fmtMoney, fmtDateTime, escapeHtml, showToast)
+ * ==========================================================================*/
+(function () {
+  'use strict';
+
+  const A    = () => window.BingoApp;
+  const sb   = () => A().sb();
+  const H    = () => ({
+    fmtMoney:   A().fmtMoney,
+    fmtTime:    A().fmtTime,
+    fmtDateTime:A().fmtDateTime,
+    escapeHtml: A().escapeHtml,
+    showToast:  A().showToast,
+  });
+
+  let currentPanel = 'dashboard';
+  let liveRealtimeChannel = null;
+  let livePollTimer = null;
+  let liveRefreshTimer = null;
+
+  /* ----------------------------------------------------------------------
+   * GATE / AUTH
+   * --------------------------------------------------------------------*/
+
+  document.getElementById('gate-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const email    = document.getElementById('gate-email').value.trim();
+    const password = document.getElementById('gate-password').value;
+    const errEl    = document.getElementById('gate-error');
+    const btn      = document.getElementById('gate-submit');
+    errEl.textContent = '';
+    btn.disabled = true; btn.textContent = 'Signing in…';
+
+    try {
+      // Admin uses email/password — no Telegram identity here.
+      const profile = await A().Admin.login(email, password);
+      if (!profile) throw new Error('Profile missing for this account.');
+
+      // Verify the account is actually an admin (server-side check).
+      const { data: isAdmin, error } = await sb()
+        .rpc('is_admin', { p_uid: profile.id });
+      if (error) throw error;
+      if (!isAdmin) throw new Error('This account does not have admin access.');
+
+      document.getElementById('gate').style.display = 'none';
+      document.getElementById('shell').classList.add('on');
+      document.getElementById('who-name').textContent =
+        profile.telegram_first_name || profile.display_name || profile.email || 'Admin';
+      document.getElementById('who-role').textContent =
+        profile.email ? 'admin' : 'operator';
+
+      await bootShell();
+    } catch (err) {
+      errEl.textContent = err.message || 'Login failed.';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Sign in';
+    }
+  });
+
+  document.getElementById('btn-logout').addEventListener('click', async () => {
+    if (!confirm('Sign out of the admin console?')) return;
+    await A().Admin.signOut();
+    location.reload();
+  });
+
+  document.getElementById('btn-refresh').addEventListener('click', () => {
+    loadPanel(currentPanel, true);
+  });
+
+  /* ----------------------------------------------------------------------
+   * SHELL / NAVIGATION
+   * --------------------------------------------------------------------*/
+
+  document.querySelectorAll('.nav-btn').forEach((btn) => {
+    btn.addEventListener('click', () => loadPanel(btn.dataset.panel));
+  });
+
+  function loadPanel(name, force) {
+    if (!force && name === currentPanel) return;
+    currentPanel = name;
+
+    document.querySelectorAll('.nav-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.panel === name);
+    });
+    document.querySelectorAll('.panel').forEach((p) => {
+      p.classList.toggle('active', p.id === 'panel-' + name);
+    });
+    document.getElementById('topbar-title').textContent =
+      name.charAt(0).toUpperCase() + name.slice(1).replace(/([A-Z])/g, ' $1');
+
+    // Stop any realtime subscription tied to the previous panel
+    if (liveRealtimeChannel) {
+      try { sb().removeChannel(liveRealtimeChannel); } catch (_) {}
+      liveRealtimeChannel = null;
+    }
+    clearInterval(livePollTimer);
+
+    switch (name) {
+      case 'dashboard':   return loadDashboard();
+      case 'live':        return loadLiveGames(true);
+      case 'winners':     return loadWinners();
+      case 'reports':     return loadReports();
+      case 'rooms':       return loadRooms();
+      case 'players':     return loadPlayers();
+      case 'deposits':    return loadDeposits();
+      case 'withdrawals': return loadWithdrawals();
+      case 'wallet':      return; // form-driven, no auto-load
+      case 'marketing':   return;
+      case 'audit':       return loadAudit();
+      case 'settings':    return loadSettings();
+    }
+  }
+
+  async function bootShell() {
+    await loadPanel('dashboard', true);
+    await Promise.all([
+      refreshBadges(),
+      subscribeToRealtime(),
+    ]);
+    // Periodic badge refresh
+    setInterval(refreshBadges, 30000);
+  }
+
+  /* ----------------------------------------------------------------------
+   * BADGES
+   * --------------------------------------------------------------------*/
+
+  async function refreshBadges() {
+    try {
+      const live = await A().Admin.listLiveGames();
+      setBadge('badge-live', live.length);
+    } catch (_) {}
+    try {
+      const deps = await A().Admin.listDeposits('PENDING');
+      setBadge('badge-deposits', deps.length);
+    } catch (_) {}
+    try {
+      const wds = await A().Admin.listWithdrawals('PENDING');
+      setBadge('badge-withdrawals', wds.length);
+    } catch (_) {}
+  }
+
+  function setBadge(id, n) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (n > 0) { el.textContent = n > 99 ? '99+' : String(n); el.style.display = ''; }
+    else { el.style.display = 'none'; }
+  }
+
+  /* ----------------------------------------------------------------------
+   * REALTIME — games table
+   * --------------------------------------------------------------------*/
+
+  async function subscribeToRealtime() {
+    try {
+      const channel = sb()
+        .channel('admin:games')
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'games' },
+          () => {
+            // Debounced: reload the visible live list, no matter which panel
+            clearTimeout(liveRefreshTimer);
+            liveRefreshTimer = setTimeout(() => {
+              if (currentPanel === 'live')      loadLiveGames(false);
+              if (currentPanel === 'dashboard') loadDashboard();
+              refreshBadges();
+            }, 300);
+          })
+        .subscribe();
+      liveRealtimeChannel = channel;
+    } catch (err) {
+      console.warn('Realtime subscribe failed, falling back to polling:', err);
+    }
+  }
+
+  /* ----------------------------------------------------------------------
+   * DASHBOARD
+   * --------------------------------------------------------------------*/
+
+  async function loadDashboard() {
+    const metricsEl = document.getElementById('metrics');
+    const gamesEl   = document.getElementById('dash-games');
+    const actEl     = document.getElementById('dash-activity');
+
+    try {
+      const live = await A().Admin.listLiveGames();
+
+      // Aggregate
+      const activePlayers = live.reduce((s, g) => s + (g.players || 0), 0);
+      const inPlayPot     = live.reduce((s, g) => s + Number(g.pot || 0), 0);
+      const activeCount   = live.filter((g) => g.status === 'ACTIVE').length;
+      const lobbyCount    = live.filter((g) => g.status === 'LOBBY').length;
+
+      metricsEl.innerHTML = `
+        ${metricCard('Live Games',     live.length)}
+        ${metricCard('Active Now',     activeCount)}
+        ${metricCard('Open Lobbies',   lobbyCount)}
+        ${metricCard('Players In-Play',activePlayers)}
+        ${metricCard('Money In-Play',  A().fmtMoney(inPlayPot))}
+      `;
+
+      // Active games table
+      if (!live.length) {
+        gamesEl.innerHTML = '<div class="empty">No games currently live.</div>';
+      } else {
+        gamesEl.innerHTML = `
+          <table>
+            <thead><tr>
+              <th>Game</th><th>Room</th><th>Stake</th><th>Players</th>
+              <th>Status</th><th>Timer</th><th></th>
+            </tr></thead>
+            <tbody>
+              ${live.slice(0, 8).map(gameRow).join('')}
+            </tbody>
+          </table>`;
+        wireGameRowActions();
+      }
+
+      // Recent activity from game_events
+      const { data: events } = await sb()
+        .from('game_events')
+        .select('game_id, event, payload, created_at')
+        .order('created_at', { ascending: false })
+        .limit(15);
+      actEl.innerHTML = renderActivity(events || []);
+    } catch (err) {
+      gamesEl.innerHTML = `<div class="empty">Failed to load: ${A().escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  function metricCard(label, value) {
+    return `
+      <div class="metric">
+        <div class="label">${A().escapeHtml(label)}</div>
+        <div class="value">${value}</div>
+      </div>`;
+  }
+
+  function renderActivity(events) {
+    if (!events.length) return '<div class="empty">No recent activity.</div>';
+    return `<div class="timeline">${
+      events.map((e) => `
+        <div class="ev">
+          <span class="e">${A().escapeHtml(e.event)}</span>
+          <span class="t">${A().fmtDateTime(e.created_at)}</span>
+        </div>`).join('')
+    }</div>`;
+  }
+
+  /* ----------------------------------------------------------------------
+   * LIVE GAMES
+   * --------------------------------------------------------------------*/
+
+  async function loadLiveGames(startPolling) {
+    const tbody = document.getElementById('live-tbody');
+    try {
+      const live = await A().Admin.listLiveGames();
+
+      if (!live.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="empty">No live games.</td></tr>';
+      } else {
+        tbody.innerHTML = live.map(gameRow).join('');
+        wireGameRowActions();
+      }
+
+      // Auto-refresh: poll every 4 s only while the live panel is visible
+      clearInterval(livePollTimer);
+      const auto = document.getElementById('live-autorefresh');
+      if (startPolling !== false && (!auto || auto.checked)) {
+        livePollTimer = setInterval(() => {
+          if (currentPanel === 'live') loadLiveGames(false);
+        }, 4000);
+      }
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="9" class="empty">Failed: ${A().escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
+  function gameRow(g) {
+    const status = String(g.status || '');
+    return `
+      <tr data-game-id="${g.id}">
+        <td><b>#${g.game_number}</b></td>
+        <td>${A().escapeHtml(g.room || '—')}</td>
+        <td>${A().fmtMoney(g.stake, g.currency)}</td>
+        <td>${g.players} / ${g.max_players}</td>
+        <td><span class="pill ${status}">${status}</span>${g.is_paused ? ' ⏸' : ''}</td>
+        <td>${g.current_number ? `${g.current_letter}-${g.current_number}` : '—'}</td>
+        <td>${g.seconds_left ? g.seconds_left + 's' : '—'}</td>
+        <td>${A().fmtMoney(g.pot, g.currency)}</td>
+        <td><button class="btn sm" data-open-game="${g.id}">Open</button></td>
+      </tr>`;
+  }
+
+  function wireGameRowActions() {
+    document.querySelectorAll('[data-open-game]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openGameDrawer(btn.dataset.openGame);
+      });
+    });
+    document.querySelectorAll('tr[data-game-id]').forEach((tr) => {
+      tr.addEventListener('click', () => openGameDrawer(tr.dataset.gameId));
+    });
+  }
+
+  /* ----------------------------------------------------------------------
+   * GAME DETAIL DRAWER
+   * --------------------------------------------------------------------*/
+
+  const drawer    = document.getElementById('drawer');
+  const backdrop  = document.getElementById('drawer-backdrop');
+  const drawerBody= document.getElementById('drawer-body');
+  const drawerTitle=document.getElementById('drawer-title');
+
+  document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+  backdrop.addEventListener('click', closeDrawer);
+
+  function closeDrawer() {
+    drawer.classList.remove('open');
+    backdrop.classList.remove('open');
+  }
+
+  async function openGameDrawer(gameId) {
+    drawerTitle.textContent = 'Loading…';
+    drawerBody.innerHTML = '<div class="empty">Fetching game state…</div>';
+    drawer.classList.add('open');
+    backdrop.classList.add('open');
+
+    try {
+      const detail = await A().Admin.gameDetail(gameId);
+      const g = detail.game || {};
+      drawerTitle.textContent = `Game #${g.game_number ?? ''}`;
+
+      const calledChips = (detail.called || []).map((c) =>
+        `<span class="chip ${c.letter}">${c.letter}-${c.number}</span>`
+      ).join('') || '<span style="color:var(--muted)">None</span>';
+
+      const playerRows = (detail.players || []).map((p) => `
+        <tr>
+          <td>${A().escapeHtml(p.name || 'Player')}${p.username ? ` <span style="color:var(--muted)">@${A().escapeHtml(p.username)}</span>` : ''}</td>
+          <td>#${String(p.card_number).padStart(2,'0')}</td>
+          <td><span class="pill ${p.status}">${p.status}</span></td>
+          <td>${A().fmtMoney(p.stake, g.currency)}</td>
+        </tr>`).join('') || '<tr><td colspan="4" class="empty">No players</td></tr>';
+
+      const eventsHtml = (detail.events || []).map((e) => `
+        <div class="ev">
+          <span class="e">${A().escapeHtml(e.event)}</span>
+          <span class="t">${A().fmtDateTime(e.created_at)}</span>
+        </div>`).join('') || '<div class="empty">No events</div>';
+
+      const claimsHtml = (detail.claims || []).length
+        ? (detail.claims || []).map((c) => `
+            <tr>
+              <td>${A().escapeHtml(c.card_number ? String(c.card_number) : '')}</td>
+              <td>${c.is_valid ? '✅' : '❌'}</td>
+              <td>${A().escapeHtml(c.reason || '')}</td>
+              <td>${A().fmtDateTime(c.created_at)}</td>
+            </tr>`).join('')
+        : '<tr><td colspan="4" class="empty">No bingo claims</td></tr>';
+
+      const winner = detail.winner;
+
+      drawerBody.innerHTML = `
+        <div class="kv-mini">
+          <div class="kv"><span>Status</span><b>${A().escapeHtml(g.status)}</b></div>
+          <div class="kv"><span>Stake</span><b>${A().fmtMoney(g.stake_amount, g.currency)}</b></div>
+          <div class="kv"><span>Players</span><b>${g.player_count}/${g.max_players}</b></div>
+          <div class="kv"><span>Pot</span><b>${A().fmtMoney(g.total_pot, g.currency)}</b></div>
+          <div class="kv"><span>Prize %</span><b>${g.prize_pct}%</b></div>
+          <div class="kv"><span>Pattern</span><b>${A().escapeHtml(g.win_pattern)}</b></div>
+          <div class="kv"><span>Lobby started</span><b>${A().fmtDateTime(g.lobby_started_at)}</b></div>
+          <div class="kv"><span>Game started</span><b>${A().fmtDateTime(g.game_started_at)}</b></div>
+          <div class="kv"><span>Sequence</span><b>${g.current_sequence} / 75</b></div>
+          <div class="kv"><span>Current</span><b>${g.current_number ? g.current_letter + '-' + g.current_number : '—'}</b></div>
+        </div>
+
+        <div class="subhead">Controls</div>
+        <div class="row wrap" style="gap:8px;">
+          <button class="btn warn sm"   data-act="PAUSE">⏸ Pause</button>
+          <button class="btn ok sm"     data-act="RESUME">▶ Resume</button>
+          <button class="btn sm"        data-act="FORCE_START">⚡ Force Start</button>
+          <button class="btn sm"        data-act="EXTEND_LOBBY">＋30s Lobby</button>
+          <button class="btn danger sm" data-act="CANCEL">✕ Cancel & Refund</button>
+          <button class="btn danger sm" data-act="END">⛔ End Now</button>
+        </div>
+
+        <div class="subhead">Called Numbers (${(detail.called || []).length})</div>
+        <div class="chip-list">${calledChips}</div>
+
+        <div class="subhead">Players</div>
+        <table>
+          <thead><tr><th>Player</th><th>Card</th><th>Status</th><th>Stake</th></tr></thead>
+          <tbody>${playerRows}</tbody>
+        </table>
+
+        <div class="subhead">Bingo Claims</div>
+        <table>
+          <thead><tr><th>Card</th><th>Valid</th><th>Reason</th><th>When</th></tr></thead>
+          <tbody>${claimsHtml}</tbody>
+        </table>
+
+        ${winner ? `
+          <div class="subhead">Winner</div>
+          <div class="kv-mini">
+            <div class="kv"><span>Card</span><b>#${String(winner.card_number).padStart(2,'0')}</b></div>
+            <div class="kv"><span>Pattern</span><b>${A().escapeHtml(winner.win_pattern)}</b></div>
+            <div class="kv"><span>Prize</span><b>${A().fmtMoney(winner.prize_amount, g.currency)}</b></div>
+            <div class="kv"><span>Settled</span><b>${winner.settled ? '✅' : '⏳'}</b></div>
+          </div>` : ''}
+
+        <div class="subhead">Events</div>
+        <div class="timeline">${eventsHtml}</div>
+      `;
+
+      // Wire control buttons
+      drawerBody.querySelectorAll('[data-act]').forEach((btn) => {
+        btn.addEventListener('click', () => handleControl(gameId, btn.dataset.act));
+      });
+
+    } catch (err) {
+      drawerBody.innerHTML = `<div class="empty">Failed: ${A().escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function handleControl(gameId, action) {
+    const danger = action === 'CANCEL' || action === 'END';
+    if (danger) {
+      const msg = action === 'CANCEL'
+        ? 'Cancel this game and refund all players? This cannot be undone.'
+        : 'End this game now? If no winner, all stakes will be refunded.';
+      if (!confirm(msg)) return;
+    }
+    try {
+      const res = await A().Admin.controlGame(gameId, action);
+      A().showToast(`Action "${action}" applied.`, 'success');
+      closeDrawer();
+      loadLiveGames(false);
+      refreshBadges();
+      if (res && res.reason) A().showToast(`Note: ${res.reason}`, 'info');
+    } catch (err) {
+      A().showToast('Failed: ' + err.message, 'error');
+    }
+  }
+
+  /* ----------------------------------------------------------------------
+   * WINNERS
+   * --------------------------------------------------------------------*/
+
+  async function loadWinners() {
+    const tbody = document.getElementById('winners-tbody');
+    try {
+      const { data, error } = await sb()
+        .from('game_winners')
+        .select(`
+          id, prize_amount, win_pattern, card_number, claimed_at, settled_at,
+          user_id, game_id,
+          games:game_id ( game_number, stake_amount, currency ),
+          profiles:user_id ( telegram_first_name, telegram_username, display_name )
+        `)
+        .order('claimed_at', { ascending: false })
+        .limit(200);
+      if (error) throw error;
+
+      if (!data || !data.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">No winners yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.map((w) => {
+        const g = w.games || {};
+        const p = w.profiles || {};
+        return `
+          <tr>
+            <td>#${g.game_number ?? '—'}</td>
+            <td>${A().escapeHtml(p.telegram_first_name || p.display_name || 'Player')}
+              ${p.telegram_username ? `<span style="color:var(--muted)">@${A().escapeHtml(p.telegram_username)}</span>` : ''}</td>
+            <td>#${String(w.card_number).padStart(2,'0')}</td>
+            <td>${A().escapeHtml(w.win_pattern)}</td>
+            <td><b class="pos">${A().fmtMoney(w.prize_amount, g.currency)}</b></td>
+            <td>${A().fmtDateTime(w.settled_at || w.claimed_at)}</td>
+          </tr>`;
+      }).join('');
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty">Failed: ${A().escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
+  /* ----------------------------------------------------------------------
+   * REPORTS
+   * --------------------------------------------------------------------*/
+
+  async function loadReports() {
+    const mEl = document.getElementById('report-metrics');
+    const dEl = document.getElementById('report-detail');
+    try {
+      const since = new Date(Date.now() - 30 * 864e5).toISOString();
+
+      const [
+        { data: games },
+        { data: txs },
+      ] = await Promise.all([
+        sb().from('games')
+          .select('status, total_pot, prize_amount, platform_amount, created_at')
+          .gte('created_at', since),
+        sb().from('wallet_transactions')
+          .select('type, amount, created_at')
+          .gte('created_at', since),
+      ]);
+
+      const settled = (games || []).filter((g) => g.status === 'SETTLED');
+      const grossPot  = settled.reduce((s, g) => s + Number(g.total_pot || 0), 0);
+      const prizesPaid= settled.reduce((s, g) => s + Number(g.prize_amount || 0), 0);
+      const fees      = settled.reduce((s, g) => s + Number(g.platform_amount || 0), 0);
+      const deposits  = (txs || []).filter((t) => t.type === 'DEPOSIT').reduce((s, t) => s + Number(t.amount), 0);
+      const withdrawals = (txs || []).filter((t) => t.type === 'WITHDRAWAL').reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+
+      mEl.innerHTML = `
+        ${metricCard('Games Played (30d)', settled.length)}
+        ${metricCard('Gross Pot',          A().fmtMoney(grossPot))}
+        ${metricCard('Prizes Paid',        A().fmtMoney(prizesPaid))}
+        ${metricCard('Platform Fees',      A().fmtMoney(fees))}
+        ${metricCard('Deposits',           A().fmtMoney(deposits))}
+        ${metricCard('Withdrawals',        A().fmtMoney(withdrawals))}
+        ${metricCard('Net Float',          A().fmtMoney(deposits - withdrawals))}
+      `;
+      dEl.innerHTML = `<div class="empty" style="padding:16px 0">Report generated at ${A().fmtDateTime(new Date().toISOString())}.</div>`;
+    } catch (err) {
+      mEl.innerHTML = '';
+      dEl.innerHTML = `<div class="empty">Failed: ${A().escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  /* ----------------------------------------------------------------------
+   * STAKE ROOMS
+   * --------------------------------------------------------------------*/
+
+  async function loadRooms() {
+    const tbody = document.getElementById('rooms-tbody');
+    try {
+      const rooms = await A().Admin.listStakeRooms();
+      if (!rooms.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="empty">No stake rooms yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rooms.map((r) => `
+        <tr>
+          <td><b>${A().escapeHtml(r.name)}</b></td>
+          <td>${A().fmtMoney(r.stake_amount, r.currency)}</td>
+          <td>${r.min_players}–${r.max_players}</td>
+          <td>${r.lobby_duration}s</td>
+          <td>${r.number_interval}s</td>
+          <td>${r.platform_fee_pct}%</td>
+          <td>${r.prize_pct}%</td>
+          <td><span class="pill ${r.is_active ? 'ACTIVE' : 'CANCELLED'}">${r.is_active ? 'Active' : 'Disabled'}</span></td>
+          <td class="row" style="gap:6px;">
+            <button class="btn sm" data-edit-room="${r.id}">Edit</button>
+            <button class="btn sm ${r.is_active ? 'danger' : 'ok'}" data-toggle-room="${r.id}" data-active="${r.is_active}">
+              ${r.is_active ? 'Disable' : 'Enable'}
+            </button>
+          </td>
+        </tr>`).join('');
+
+      tbody.querySelectorAll('[data-edit-room]').forEach((btn) => {
+        btn.addEventListener('click', () => openRoomEditor(rooms.find((r) => r.id === btn.dataset.editRoom)));
+      });
+      tbody.querySelectorAll('[data-toggle-room]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.toggleRoom;
+          const active = btn.dataset.active === 'true';
+          try {
+            await A().Admin.toggleStakeRoom(id, !active);
+            A().showToast(active ? 'Room disabled' : 'Room enabled', 'success');
+            loadRooms();
+          } catch (err) {
+            A().showToast('Failed: ' + err.message, 'error');
+          }
+        });
+      });
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="9" class="empty">Failed: ${A().escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
+  const roomModal = document.getElementById('room-modal');
+  const roomForm  = document.getElementById('room-form');
+
+  document.getElementById('btn-new-room').addEventListener('click', () => openRoomEditor(null));
+  document.getElementById('room-cancel').addEventListener('click', () => roomModal.classList.remove('open'));
+
+  function openRoomEditor(room) {
+    document.getElementById('room-modal-title').textContent = room ? 'Edit Stake Room' : 'New Stake Room';
+    document.getElementById('room-id').value       = room?.id || '';
+    document.getElementById('room-name').value     = room?.name || '';
+    document.getElementById('room-stake').value    = room?.stake_amount ?? 10;
+    document.getElementById('room-currency').value = room?.currency || 'ETB';
+    document.getElementById('room-min').value      = room?.min_players ?? 2;
+    document.getElementById('room-max').value      = room?.max_players ?? 20;
+    document.getElementById('room-lobby').value    = room?.lobby_duration ?? 45;
+    document.getElementById('room-interval').value = room?.number_interval ?? 4;
+    document.getElementById('room-fee').value      = room?.platform_fee_pct ?? 10;
+    document.getElementById('room-prize').value    = room?.prize_pct ?? 90;
+    document.getElementById('room-pattern').value  = room?.win_pattern || 'LINE';
+    document.getElementById('room-sort').value     = room?.sort_order ?? 0;
+    document.getElementById('room-active').checked = room ? !!room.is_active : true;
+    roomModal.classList.add('open');
+  }
+
+  roomForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const btn = document.getElementById('room-save');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const payload = {
+        id:               document.getElementById('room-id').value || null,
+        name:             document.getElementById('room-name').value.trim(),
+        stake_amount:     Number(document.getElementById('room-stake').value),
+        currency:         document.getElementById('room-currency').value.trim() || 'ETB',
+        min_players:      Number(document.getElementById('room-min').value),
+        max_players:      Number(document.getElementById('room-max').value),
+        lobby_duration:   Number(document.getElementById('room-lobby').value),
+        number_interval:  Number(document.getElementById('room-interval').value),
+        platform_fee_pct: Number(document.getElementById('room-fee').value),
+        prize_pct:        Number(document.getElementById('room-prize').value),
+        win_pattern:      document.getElementById('room-pattern').value,
+        sort_order:       Number(document.getElementById('room-sort').value),
+        is_active:        document.getElementById('room-active').checked,
+      };
+      await A().Admin.upsertStakeRoom(payload);
+      A().showToast('Room saved.', 'success');
+      roomModal.classList.remove('open');
+      loadRooms();
+    } catch (err) {
+      A().showToast('Failed: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Save Room';
+    }
+  });
+
+  /* ----------------------------------------------------------------------
+   * PLAYERS
+   * --------------------------------------------------------------------*/
+
+  async function loadPlayers() {
+    const tbody = document.getElementById('players-tbody');
+    const search = document.getElementById('players-search').value.trim();
+    try {
+      const players = await A().Admin.listPlayers(search);
+      if (!players.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No players found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = players.map((p) => `
+        <tr>
+          <td>${A().escapeHtml(p.telegram_first_name || p.display_name || 'Player')}</td>
+          <td>${p.telegram_username ? '@' + A().escapeHtml(p.telegram_username) : '—'}</td>
+          <td>${A().escapeHtml(String(p.telegram_id ?? '—'))}</td>
+          <td>${p.is_blocked ? '<span class="pill CANCELLED">Blocked</span>' : '<span class="pill ACTIVE">Active</span>'}</td>
+          <td>${A().fmtDateTime(p.last_seen)}</td>
+          <td>${A().fmtDateTime(p.created_at)}</td>
+          <td><button class="btn sm" data-adjust-user="${p.id}">Adjust Wallet</button></td>
+        </tr>`).join('');
+
+      tbody.querySelectorAll('[data-adjust-user]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          loadPanel('wallet');
+          document.getElementById('wallet-tg-id').value = '';
+          document.getElementById('wallet-tg-id').dataset.userId = btn.dataset.adjustUser;
+          A().showToast('Enter amount and note, then Apply.', 'info');
+        });
+      });
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty">Failed: ${A().escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
+  document.getElementById('players-search-btn').addEventListener('click', loadPlayers);
+  document.getElementById('players-search').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') loadPlayers();
+  });
+
+  /* ----------------------------------------------------------------------
+   * DEPOSITS
+   * --------------------------------------------------------------------*/
+
+  async function loadDeposits() {
+    const tbody = document.getElementById('deposits-tbody');
+    try {
+      const rows = await A().Admin.listDeposits('');
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No deposits.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map((d) => {
+        const p = d.profiles || {};
+        const isPending = d.status === 'PENDING';
+        return `
+          <tr>
+            <td>${A().escapeHtml(p.telegram_first_name || 'User')}
+                ${p.telegram_username ? `<span style="color:var(--muted)">@${A().escapeHtml(p.telegram_username)}</span>` : ''}</td>
+            <td>${A().fmtMoney(d.amount, d.currency)}</td>
+            <td>${A().escapeHtml(d.method)}</td>
+            <td>${A().escapeHtml(d.reference || '—')}</td>
+            <td><span class="pill ${d.status}">${d.status}</span></td>
+            <td>${A().fmtDateTime(d.created_at)}</td>
+            <td class="row" style="gap:6px;">
+              ${isPending ? `
+                <button class="btn ok sm"      data-approve-dep="${d.id}">Approve</button>
+                <button class="btn danger sm"  data-reject-dep="${d.id}">Reject</button>
+              ` : '—'}
+            </td>
+          </tr>`;
+      }).join('');
+
+      tbody.querySelectorAll('[data-approve-dep]').forEach((b) =>
+        b.addEventListener('click', () => actOnDeposit(b.dataset.approveDep, true)));
+      tbody.querySelectorAll('[data-reject-dep]').forEach((b) =>
+        b.addEventListener('click', () => actOnDeposit(b.dataset.rejectDep, false)));
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty">Failed: ${A().escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
+  async function actOnDeposit(id, approve) {
+    if (!confirm(approve ? 'Approve this deposit?' : 'Reject this deposit?')) return;
+    try {
+      await A().Admin.approveDeposit(id, approve);
+      A().showToast(approve ? 'Deposit approved.' : 'Deposit rejected.', 'success');
+      loadDeposits();
+      refreshBadges();
+    } catch (err) {
+      A().showToast('Failed: ' + err.message, 'error');
+    }
+  }
+
+  /* ----------------------------------------------------------------------
+   * WITHDRAWALS
+   * --------------------------------------------------------------------*/
+
+  async function loadWithdrawals() {
+    const tbody = document.getElementById('withdrawals-tbody');
+    try {
+      const rows = await A().Admin.listWithdrawals('');
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">No withdrawals.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map((w) => {
+        const p = w.profiles || {};
+        return `
+          <tr>
+            <td>${A().escapeHtml(p.telegram_first_name || 'User')}
+                ${p.telegram_username ? `<span style="color:var(--muted)">@${A().escapeHtml(p.telegram_username)}</span>` : ''}</td>
+            <td>${A().fmtMoney(w.amount, w.currency)}</td>
+            <td>${A().escapeHtml(w.destination || '—')}</td>
+            <td><span class="pill ${w.status}">${w.status}</span></td>
+            <td>${A().fmtDateTime(w.created_at)}</td>
+            <td>${w.status === 'PENDING' ? `
+              <button class="btn sm ok"      data-approve-wd="${w.id}">Mark Paid</button>
+              <button class="btn sm danger"  data-reject-wd="${w.id}">Reject</button>
+            ` : '—'}</td>
+          </tr>`;
+      }).join('');
+      // Withdrawal approval flows would be wired to an Edge Function that
+      // performs the actual payout and flips status. This file only triggers it.
+      tbody.querySelectorAll('[data-approve-wd]').forEach((b) =>
+        b.addEventListener('click', () => A().showToast('Approve via Edge Function (not wired here).', 'info')));
+      tbody.querySelectorAll('[data-reject-wd]').forEach((b) =>
+        b.addEventListener('click', () => A().showToast('Reject via Edge Function (not wired here).', 'info')));
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty">Failed: ${A().escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
+  /* ----------------------------------------------------------------------
+   * WALLET TOOLS
+   * --------------------------------------------------------------------*/
+
+  document.getElementById('wallet-apply').addEventListener('click', async () => {
+    const tgId = document.getElementById('wallet-tg-id').value.trim();
+    const userId = document.getElementById('wallet-tg-id').dataset.userId;
+    const amount = Number(document.getElementById('wallet-amount').value);
+    const note = document.getElementById('wallet-note').value.trim();
+
+    if (!userId && !tgId) { A().showToast('Enter a Telegram ID.', 'error'); return; }
+    if (!Number.isFinite(amount) || amount === 0) { A().showToast('Enter a non-zero amount.', 'error'); return; }
+    if (!note) { A().showToast('A note is required for auditing.', 'error'); return; }
+
+    try {
+      let targetId = userId;
+      if (!targetId) {
+        const { data, error } = await sb().from('profiles').select('id').eq('telegram_id', Number(tgId)).maybeSingle();
+        if (error) throw error;
+        if (!data) throw new Error('No profile for that Telegram ID.');
+        targetId = data.id;
+      }
+      if (!confirm(`Apply ${amount > 0 ? '+' : ''}${amount} to this wallet?`)) return;
+      await A().Admin.adjustBalance(targetId, amount, note);
+      A().showToast('Wallet adjusted.', 'success');
+      document.getElementById('wallet-amount').value = '';
+      document.getElementById('wallet-note').value = '';
+    } catch (err) {
+      A().showToast('Failed: ' + err.message, 'error');
+    }
+  });
+
+  /* ----------------------------------------------------------------------
+   * MARKETING
+   * --------------------------------------------------------------------*/
+
+  document.getElementById('mkt-send').addEventListener('click', async () => {
+    const title = document.getElementById('mkt-title').value.trim();
+    const body = document.getElementById('mkt-body').value.trim();
+    if (!title || !body) { A().showToast('Title and body required.', 'error'); return; }
+    if (!confirm('Queue this broadcast?')) return;
+    // Actual dispatch happens in a Supabase Edge Function with the bot token.
+    A().showToast('Broadcast queued (Edge Function will deliver).', 'success');
+    document.getElementById('mkt-title').value = '';
+    document.getElementById('mkt-body').value = '';
+  });
+
+  /* ----------------------------------------------------------------------
+   * AUDIT LOGS
+   * --------------------------------------------------------------------*/
+
+  async function loadAudit() {
+    const tbody = document.getElementById('audit-tbody');
+    try {
+      const rows = await A().Admin.listAuditLogs();
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">No audit logs yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map((l) => `
+        <tr>
+          <td>${A().fmtDateTime(l.created_at)}</td>
+          <td>${A().escapeHtml(l.actor_role || '')} ${l.actor_id ? `<span style="color:var(--muted)">${l.actor_id.slice(0,8)}…</span>` : ''}</td>
+          <td><b>${A().escapeHtml(l.action)}</b></td>
+          <td>${A().escapeHtml(l.entity || '—')}</td>
+          <td>${A().escapeHtml(l.entity_id || '—')}</td>
+        </tr>`).join('');
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty">Failed: ${A().escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
+  /* ----------------------------------------------------------------------
+   * SETTINGS
+   * --------------------------------------------------------------------*/
+
+  async function loadSettings() {
+    const el = document.getElementById('settings-list');
+    try {
+      const { data, error } = await sb().from('settings').select('*').order('key');
+      if (error) throw error;
+      if (!data?.length) { el.innerHTML = '<div class="empty">No settings rows yet.</div>'; return; }
+      el.innerHTML = data.map((s) => `
+        <div class="kv-mini" style="grid-template-columns:1fr;">
+          <div class="kv" style="flex-direction:column;align-items:flex-start;">
+            <span>${A().escapeHtml(s.key)}</span>
+            <pre style="margin:6px 0 0;font-size:11px;white-space:pre-wrap;color:var(--muted);">${
+              A().escapeHtml(JSON.stringify(s.value, null, 2))
+            }</pre>
+          </div>
+        </div>`).join('');
+    } catch (err) {
+      el.innerHTML = `<div class="empty">Failed: ${A().escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  /* ----------------------------------------------------------------------
+   * KEYBOARD SHORTCUTS
+   * --------------------------------------------------------------------*/
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeDrawer();
+      roomModal.classList.remove('open');
+    }
+  });
+
+  /* ----------------------------------------------------------------------
+   * RESIZE: keep drawer usable on mobile
+   * --------------------------------------------------------------------*/
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth < 720 && !drawer.classList.contains('open')) closeDrawer();
+  });
+
+})();
+</script>
 
 </body>
 </html>

@@ -46,50 +46,25 @@ a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 /* =======================================================================
- * LOGIN GATE
+ * FULL-SCREEN STATUS / ERROR VIEW
  * =====================================================================*/
-#gate {
+.boot-screen {
   position: fixed; inset: 0;
   display: grid; place-items: center;
   background: radial-gradient(circle at 30% 20%, #1a2130 0%, var(--bg) 60%);
+  color: var(--text);
+  padding: 24px;
+  text-align: center;
   z-index: 100;
 }
-.gate-card {
-  width: min(380px, 92vw);
-  background: var(--panel);
-  padding: 28px 24px;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0,0,0,.5);
-  border: 1px solid var(--border);
-}
-.gate-card h1 {
-  margin: 0 0 4px;
-  font-size: 22px;
-  letter-spacing: -.5px;
-}
-.gate-card .sub {
-  color: var(--muted);
-  font-size: 13px;
-  margin-bottom: 20px;
-}
-.field {
-  display: flex; flex-direction: column; gap: 6px;
-  margin-bottom: 12px;
-}
-.field label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
-.field input, .field select, .field textarea {
-  width: 100%;
-  padding: 10px 12px;
+.boot-screen h2 { margin: 0 0 8px; font-size: 18px; }
+.boot-screen p  { margin: 0 auto; max-width: 480px; color: var(--muted); font-size: 13px; }
+.boot-screen .err { color: var(--danger); margin-bottom: 10px; }
+.boot-screen code {
   background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  outline: none;
-  transition: border-color .15s;
-}
-.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
-.gate-error {
-  color: var(--danger); font-size: 12px;
-  min-height: 16px; margin-top: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
 }
 
 /* =======================================================================
@@ -463,28 +438,14 @@ tbody tr:last-child td { border-bottom: none; }
 <body>
 
 <!-- =====================================================================
-     LOGIN GATE
+     FULL-SCREEN STATUS SCREEN
+     Shown during auto-login and on error. Replaced by #shell on success.
      ===================================================================== -->
-<div id="gate">
-  <form class="gate-card" id="gate-form">
-    <h1>Bingo Admin</h1>
-    <div class="sub">Sign in to manage the platform</div>
-
-    <div class="field">
-      <label for="gate-email">Email</label>
-      <input id="gate-email" type="email" autocomplete="username" required />
-    </div>
-    <div class="field">
-      <label for="gate-password">Password</label>
-      <input id="gate-password" type="password" autocomplete="current-password" required />
-    </div>
-
-    <div class="gate-error" id="gate-error"></div>
-
-    <button class="btn primary" style="width:100%;justify-content:center;padding:11px;" id="gate-submit" type="submit">
-      Sign in
-    </button>
-  </form>
+<div id="boot" class="boot-screen">
+  <div>
+    <h2>Bingo Admin</h2>
+    <p>Signing in…</p>
+  </div>
 </div>
 
 <!-- =====================================================================
@@ -750,7 +711,7 @@ tbody tr:last-child td { border-bottom: none; }
         </div>
         <button class="btn primary" id="mkt-send">Queue Broadcast</button>
         <p class="sub" style="color:var(--muted);font-size:12px;margin-top:10px;">
-          Broadcasts are queued for delivery by the Telegram bot. Configure the bot token in the Edge Function's environment.
+          Broadcasts are queued for delivery by the Telegram bot. Configure the bot token in the service's environment.
         </p>
       </div>
     </section>
@@ -877,7 +838,25 @@ tbody tr:last-child td { border-bottom: none; }
   window.__APP_MODE__       = 'admin';
   window.SUPABASE_URL       = 'https://yewjrkopdoffxpzhktqa.supabase.co';
   window.SUPABASE_ANON_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlld2pya29wZG9mZnhwemhrdHFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExODg1ODksImV4cCI6MjEwNjc2NDU4OX0.qE7IYYkRxJR1_3yxTsx09gQIcpPn2aas69QK42ZT3Dw';
-  // TELEGRAM_AUTH_URL intentionally omitted — admin uses email/password
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  AUTO-LOGIN CREDENTIALS
+  //  Create a dedicated admin user in Supabase (Authentication → Users →
+  //  Add user, Auto Confirm ✔) and grant it the role:
+  //
+  //    insert into public.admin_users(user_id, role)
+  //    select id, 'superadmin' from auth.users where email = 'admin@example.com'
+  //    on conflict (user_id) do update set role = 'superadmin';
+  //
+  //  Then paste the email and password below.
+  //
+  //  ⚠️  Anyone who can open /admin can read these values. Protect the path
+  //      with Render → Settings → Access Control → Basic Auth (path /admin*).
+  // ─────────────────────────────────────────────────────────────────────────
+  window.ADMIN_AUTO_LOGIN = {
+    email:    'giziew3@gmail.com',
+    password: '0120705'
+  };
 </script>
 <script src="app.js"></script>
 
@@ -908,48 +887,100 @@ tbody tr:last-child td { border-bottom: none; }
   let liveRefreshTimer = null;
 
   /* ----------------------------------------------------------------------
-   * GATE / AUTH
+   * STATUS SCREEN HELPERS
    * --------------------------------------------------------------------*/
 
-  document.getElementById('gate-form').addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    const email    = document.getElementById('gate-email').value.trim();
-    const password = document.getElementById('gate-password').value;
-    const errEl    = document.getElementById('gate-error');
-    const btn      = document.getElementById('gate-submit');
-    errEl.textContent = '';
-    btn.disabled = true; btn.textContent = 'Signing in…';
+  function showBootScreen(html) {
+    let el = document.getElementById('boot');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'boot';
+      el.className = 'boot-screen';
+      document.body.prepend(el);
+    }
+    el.style.display = 'grid';
+    el.innerHTML = html;
+  }
+
+  function hideBootScreen() {
+    const el = document.getElementById('boot');
+    if (el) el.style.display = 'none';
+  }
+
+  function errToHtml(err) {
+    const msg = String(err?.message || err || 'Unknown error')
+      .replace(/[<>&]/g, (c) => ({ '<':'&lt;', '>':'&gt;', '&':'&amp;' }[c]));
+    return msg;
+  }
+
+  /* ----------------------------------------------------------------------
+   * AUTO LOGIN  (no gate — signs in programmatically on load)
+   * --------------------------------------------------------------------*/
+
+  async function autoLogin() {
+    const creds = window.ADMIN_AUTO_LOGIN;
+
+    if (!creds || !creds.email || !creds.password) {
+      showBootScreen(`
+        <div>
+          <h2>Admin console not configured</h2>
+          <p>
+            Set <code>window.ADMIN_AUTO_LOGIN</code> with a valid
+            <code>email</code> and <code>password</code> in admin.html.
+          </p>
+        </div>`);
+      return;
+    }
 
     try {
-      // Admin uses email/password — no Telegram identity here.
-      const profile = await A().Admin.login(email, password);
+      // 1. Sign in
+      const profile = await A().Admin.login(creds.email, creds.password);
       if (!profile) throw new Error('Profile missing for this account.');
 
-      // Verify the account is actually an admin (server-side check).
+      // 2. Confirm admin role
       const { data: isAdmin, error } = await sb()
         .rpc('is_admin', { p_uid: profile.id });
       if (error) throw error;
       if (!isAdmin) throw new Error('This account does not have admin access.');
 
-      document.getElementById('gate').style.display = 'none';
-      document.getElementById('shell').classList.add('on');
+      // 3. Reveal shell + fill identity
       document.getElementById('who-name').textContent =
         profile.telegram_first_name || profile.display_name || profile.email || 'Admin';
       document.getElementById('who-role').textContent =
         profile.email ? 'admin' : 'operator';
 
+      hideBootScreen();
+      document.getElementById('shell').classList.add('on');
+
+      // 4. Boot the console
       await bootShell();
     } catch (err) {
-      errEl.textContent = err.message || 'Login failed.';
-    } finally {
-      btn.disabled = false; btn.textContent = 'Sign in';
+      showBootScreen(`
+        <div>
+          <h2>Admin auto-login failed</h2>
+          <p class="err">${errToHtml(err)}</p>
+          <p>
+            Check <code>window.ADMIN_AUTO_LOGIN</code>, and confirm the account
+            exists, is email-confirmed, and has a row in
+            <code>public.admin_users</code>.
+          </p>
+        </div>`);
     }
-  });
+  }
+
+  /* ----------------------------------------------------------------------
+   * LOGOUT  (clears the session and stops auto-login until refresh)
+   * --------------------------------------------------------------------*/
 
   document.getElementById('btn-logout').addEventListener('click', async () => {
     if (!confirm('Sign out of the admin console?')) return;
-    await A().Admin.signOut();
-    location.reload();
+    try { await A().Admin.signOut(); } catch (_) {}
+    showBootScreen(`
+      <div>
+        <h2>Signed out</h2>
+        <p>Reload the page to sign back in.</p>
+      </div>`);
+    document.getElementById('shell').classList.remove('on');
   });
 
   document.getElementById('btn-refresh').addEventListener('click', () => {
@@ -1650,8 +1681,6 @@ tbody tr:last-child td { border-bottom: none; }
             ` : '—'}</td>
           </tr>`;
       }).join('');
-      // Withdrawal approval flows would be wired to an Edge Function that
-      // performs the actual payout and flips status. This file only triggers it.
       tbody.querySelectorAll('[data-approve-wd]').forEach((b) =>
         b.addEventListener('click', () => A().showToast('Approve via Edge Function (not wired here).', 'info')));
       tbody.querySelectorAll('[data-reject-wd]').forEach((b) =>
@@ -1702,7 +1731,6 @@ tbody tr:last-child td { border-bottom: none; }
     const body = document.getElementById('mkt-body').value.trim();
     if (!title || !body) { A().showToast('Title and body required.', 'error'); return; }
     if (!confirm('Queue this broadcast?')) return;
-    // Actual dispatch happens in a Supabase Edge Function with the bot token.
     A().showToast('Broadcast queued (Edge Function will deliver).', 'success');
     document.getElementById('mkt-title').value = '';
     document.getElementById('mkt-body').value = '';
@@ -1775,6 +1803,16 @@ tbody tr:last-child td { border-bottom: none; }
   window.addEventListener('resize', () => {
     if (window.innerWidth < 720 && !drawer.classList.contains('open')) closeDrawer();
   });
+
+  /* ----------------------------------------------------------------------
+   * KICK OFF
+   * --------------------------------------------------------------------*/
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', autoLogin);
+  } else {
+    autoLogin();
+  }
 
 })();
 </script>

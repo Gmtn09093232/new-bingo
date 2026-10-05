@@ -90,8 +90,8 @@ function tgHideMainButton() {
  * SUPABASE
  * ==========================================================================*/
 
-const SUPABASE_URL       = window.SUPABASE_URL      || '';
-const SUPABASE_ANON_KEY  = window.SUPABASE_ANON_KEY || '';
+const SUPABASE_URL       = window.SUPABASE_URL      || 'https://yewjrkopdoffxpzhktqa.supabase.co';
+const SUPABASE_ANON_KEY  = window.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlld2pya29wZG9mZnhwemhrdHFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExODg1ODksImV4cCI6MjEwNjc2NDU4OX0.qE7IYYkRxJR1_3yxTsx09gQIcpPn2aas69QK42ZT3Dw';
 const TELEGRAM_AUTH_URL  = window.TELEGRAM_AUTH_URL ||
                            (SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/telegram-auth` : '');
 

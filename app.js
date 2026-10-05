@@ -92,6 +92,9 @@ function tgHideMainButton() {
 
 const SUPABASE_URL       = window.SUPABASE_URL      || 'https://yewjrkopdoffxpzhktqa.supabase.co';
 const SUPABASE_ANON_KEY  = window.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlld2pya29wZG9mZnhwemhrdHFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExODg1ODksImV4cCI6MjEwNjc2NDU4OX0.qE7IYYkRxJR1_3yxTsx09gQIcpPn2aas69QK42ZT3Dw';
+
+// ⚠️  telegram-auth now runs on Render — set window.TELEGRAM_AUTH_URL in HTML.
+//     Fallback to the legacy Edge Function URL for a transitional period.
 const TELEGRAM_AUTH_URL  = window.TELEGRAM_AUTH_URL ||
                            (SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/telegram-auth` : '');
 
@@ -121,11 +124,13 @@ function sbInit() {
  * ==========================================================================*/
 
 const APP = {
-  version:           '2.0.0',
+  version:           '2.1.0',
   heartbeatMs:       1000,        // local render tick
   engineTickMs:      2000,        // distributed tick_games() heartbeat
   winnerLobbyDelay:  5000,        // 5 s winner screen before returning
   maxCardGrid:       20,          // default grid size for card selection
+  unsubscribeTimeoutMs: 1500,     // safety timeout on removeChannel
+  maxRealtimeErrors: 5,           // give up after this many consecutive errors
 };
 
 const DEFAULT_BRANDING = {
@@ -148,16 +153,17 @@ const State = {
   stakeRooms:      [],
 
   // Active flow
-  currentRoom:     null,   // selected stake room object
-  currentGame:     null,   // game row (from get_game_state)
-  myPlayer:        null,   // game_players row for me
-  gameState:       null,   // full get_game_state payload
+  currentRoom:     null,
+  currentGame:     null,
+  myPlayer:        null,
+  gameState:       null,
   availableCards:  new Set(),
   takenCards:      new Set(),
 
   // Realtime
   channel:         null,
   channelGameId:   null,
+  notifChannel:    null,
   engineTimer:     null,
   renderTimer:     null,
 
@@ -201,17 +207,35 @@ async function authenticate() {
   }
 
   if (!IS_TELEGRAM) {
-    // Outside Telegram — offer anonymous session for local development.
+    // Outside Telegram — anonymous session is DEV ONLY.
+    const isLocal =
+      location.hostname === 'localhost' ||
+      location.hostname === '127.0.0.1' ||
+      location.protocol === 'file:';
+
+    if (!isLocal) {
+      throw new Error('This app must be opened inside Telegram.');
+    }
+
     const { data, error } = await sb.auth.signInAnonymously();
     if (error) throw error;
     State.session = data.session;
     await loadProfile();
+    // One retry in case the handle_new_user trigger is still running.
+    if (!State.profile) {
+      await new Promise((r) => setTimeout(r, 600));
+      await loadProfile();
+    }
     return State.session;
   }
 
   // ---- Telegram Mini App login ----
   const initData = TG.initData;
   if (!initData) throw new Error('Telegram initData missing.');
+
+  if (!TELEGRAM_AUTH_URL) {
+    throw new Error('TELEGRAM_AUTH_URL is not configured.');
+  }
 
   const res = await fetch(TELEGRAM_AUTH_URL, {
     method: 'POST',
@@ -225,7 +249,7 @@ async function authenticate() {
   }
 
   const payload = await res.json();
-  // Edge Function returns { access_token, refresh_token, user }
+  // telegram-auth returns { access_token, refresh_token, expires_at, user }
   const { error: setErr } = await sb.auth.setSession({
     access_token:  payload.access_token,
     refresh_token: payload.refresh_token,
@@ -235,6 +259,10 @@ async function authenticate() {
   const { data: sess2 } = await sb.auth.getSession();
   State.session = sess2.session;
   await loadProfile();
+  if (!State.profile) {
+    await new Promise((r) => setTimeout(r, 600));
+    await loadProfile();
+  }
 
   // Best-effort presence ping
   sb.rpc('touch_last_seen').then(() => {}, () => {});
@@ -335,6 +363,17 @@ function letterFor(n) {
 
 function letterColor(l) {
   return ({ B: '#3B82F6', I: '#EF4444', N: '#10B981', G: '#F59E0B', O: '#8B5CF6' })[l] || '#333';
+}
+
+// Shared helper — remove a realtime channel without hanging on a wedged socket.
+async function removeChannelSafe(channel) {
+  if (!channel) return;
+  try {
+    await Promise.race([
+      sb.removeChannel(channel),
+      new Promise((r) => setTimeout(r, APP.unsubscribeTimeoutMs)),
+    ]);
+  } catch (_) {}
 }
 
 
@@ -624,20 +663,29 @@ function closeCardSelection() {
  * JOIN / LEAVE
  * ==========================================================================*/
 
+// In-flight guard so double-tap JOIN cannot fire two RPCs.
+let _joining = false;
+
 async function joinStakeRoom(stakeRoomId, cardNumber) {
-  const { data, error } = await sb.rpc('join_stake_room', {
-    p_stake_room_id: stakeRoomId,
-    p_card_number:   cardNumber,
-  });
-  if (error) throw new Error(friendlyRpcError(error));
+  if (_joining) return;
+  _joining = true;
+  try {
+    const { data, error } = await sb.rpc('join_stake_room', {
+      p_stake_room_id: stakeRoomId,
+      p_card_number:   cardNumber,
+    });
+    if (error) throw new Error(friendlyRpcError(error));
 
-  tgNotify('success');
-  await loadWallet();
-  renderPlayerHeader();
+    tgNotify('success');
+    await loadWallet();
+    renderPlayerHeader();
 
-  // Enter the game view
-  await enterGame(data.game_id);
-  return data;
+    // Enter the game view
+    await enterGame(data.game_id);
+    return data;
+  } finally {
+    _joining = false;
+  }
 }
 
 function friendlyRpcError(err) {
@@ -678,9 +726,12 @@ async function enterGame(gameId) {
   const { data, error } = await sb.rpc('get_game_state', { p_game_id: gameId });
   if (error) throw new Error(friendlyRpcError(error));
 
-  State.gameState  = data;
+  State.gameState   = data;
   State.currentGame = data.game;
-  State.myPlayer   = data.me;
+  State.myPlayer    = data.me;
+
+  // Force a render even if a previous key happens to match.
+  _lastGameRenderKey = '';
 
   // Route to game view
   switchView('game');
@@ -694,6 +745,7 @@ async function enterGame(gameId) {
 }
 
 async function exitGame() {
+  _lastGameRenderKey = '';
   await unsubscribeGame();
   stopLocalTimers();
   State.gameState    = null;
@@ -706,11 +758,15 @@ async function refreshGameState() {
   if (!gid) return;
   const { data, error } = await sb.rpc('get_game_state', { p_game_id: gid });
   if (error) { console.warn('[refreshGameState]', error); return; }
-  State.gameState  = data;
+  State.gameState   = data;
   State.currentGame = data.game;
-  State.myPlayer   = data.me;
+  State.myPlayer    = data.me;
   renderGame();
 }
+
+// Skip DOM churn when nothing meaningful changed. Prevents the BINGO button
+// being replaced mid-tap by a realtime event.
+let _lastGameRenderKey = '';
 
 function renderGame() {
   const root = $('#game-view');
@@ -718,15 +774,28 @@ function renderGame() {
 
   const g = State.currentGame;
   if (!g) {
+    _lastGameRenderKey = '';
     root.innerHTML = `<div class="empty">You are not currently in a game.</div>`;
     tgHideMainButton();
     return;
   }
 
+  const renderKey = [
+    g.id,
+    g.status,
+    g.current_number,
+    g.is_paused ? 1 : 0,
+    g.player_count,
+    (State.gameState?.called_numbers || []).length,
+    State.gameState?.winner?.id || '',
+  ].join('|');
+
+  if (renderKey === _lastGameRenderKey) return;
+  _lastGameRenderKey = renderKey;
+
   const cur = g.currency || 'ETB';
   const me  = State.myPlayer || {};
   const calledSet = new Set((State.gameState?.called_numbers || []).map((c) => c.number));
-  const lastCalled = (State.gameState?.called_numbers || []).slice(-1)[0];
 
   // ---- Header block ----
   const headerHtml = `
@@ -751,7 +820,7 @@ function renderGame() {
     </div>
   `;
 
-  // ---- Lobby block (countdown, player list, taken cards) ----
+  // ---- Body block ----
   let bodyHtml = '';
 
   if (g.status === 'LOBBY') {
@@ -874,6 +943,7 @@ function renderBingoCard(matrix, calledSet) {
   if (!matrix) return '';
   const letters = ['B', 'I', 'N', 'G', 'O'];
   let html = '<div class="bingo-card">';
+
   // Header
   html += '<div class="bingo-row header">';
   for (const L of letters) {
@@ -930,7 +1000,11 @@ async function onBingoClaim() {
     console.error(err);
     showToast(err.message || 'Bingo check failed.', 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.classList.remove('busy'); }
+    // Only re-enable if the node is still in the DOM (i.e. not re-rendered).
+    if (btn && btn.isConnected) {
+      btn.disabled = false;
+      btn.classList.remove('busy');
+    }
   }
 }
 
@@ -939,10 +1013,13 @@ async function onBingoClaim() {
  * REALTIME
  * ==========================================================================*/
 
+let _subErrors = 0;
+
 async function subscribeToGame(gameId) {
   // Drop any previous subscription
   await unsubscribeGame();
 
+  _subErrors = 0;
   const channelName = `game:${gameId}`;
   const channel = sb.channel(channelName, {
     config: { broadcast: { self: true } },
@@ -954,7 +1031,6 @@ async function subscribeToGame(gameId) {
     (payload) => {
       if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
         const row = payload.new;
-        // Patch state without a full refetch
         State.currentGame = { ...(State.currentGame || {}), ...row };
         renderGame();
         maybeHandleStatusTransition(row.status);
@@ -966,7 +1042,6 @@ async function subscribeToGame(gameId) {
   channel.on('postgres_changes',
     { event: '*', schema: 'public', table: 'game_players', filter: `game_id=eq.${gameId}` },
     () => {
-      // Cheap: refresh authoritative state (player list, my card, etc.)
       debouncedRefresh(250);
     }
   );
@@ -1017,11 +1092,19 @@ async function subscribeToGame(gameId) {
 
   channel.subscribe((status) => {
     if (status === 'SUBSCRIBED') {
+      _subErrors = 0;
       console.info('[realtime] subscribed', channelName);
-    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-      console.warn('[realtime] issue', status, '— will retry');
-      // Supabase-js auto-reconnects; on our side, do a full resync once we recover.
-      setTimeout(refreshGameState, 1500);
+      return;
+    }
+    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      _subErrors++;
+      console.warn('[realtime] issue', status, `attempt ${_subErrors}`);
+      if (_subErrors <= APP.maxRealtimeErrors) {
+        const delay = Math.min(30_000, 1500 * 2 ** (_subErrors - 1));
+        setTimeout(refreshGameState, delay);
+      } else {
+        console.warn('[realtime] giving up after', APP.maxRealtimeErrors, 'consecutive errors');
+      }
     }
   });
 
@@ -1030,11 +1113,10 @@ async function subscribeToGame(gameId) {
 }
 
 async function unsubscribeGame() {
-  if (State.channel) {
-    try { await sb.removeChannel(State.channel); } catch (_) {}
-  }
+  const ch = State.channel;
   State.channel = null;
   State.channelGameId = null;
+  await removeChannelSafe(ch);
 }
 
 // Coalesce rapid refreshes
@@ -1095,17 +1177,19 @@ function tickRender() {
     if (!g.__returnAt) {
       g.__returnAt = Date.now() + APP.winnerLobbyDelay;
     } else if (Date.now() >= g.__returnAt) {
-      autoReturnToLobby();
+      autoReturnToLobby().catch((e) => console.warn('[autoReturnToLobby]', e));
     }
   }
 }
 
+// Always derive from lobby_ends_at (server-truth) so the countdown updates
+// smoothly. `seconds_left` from get_game_state is only a snapshot.
 function computeLobbySeconds(g) {
-  // Prefer server-provided seconds_left when fresh; else derive from lobby_ends_at
+  if (g.lobby_ends_at) {
+    return Math.max(0, Math.floor((new Date(g.lobby_ends_at).getTime() - Date.now()) / 1000));
+  }
   const s = State.gameState?.game?.seconds_left;
-  if (typeof s === 'number' && s >= 0) return s;
-  if (!g.lobby_ends_at) return 0;
-  return Math.max(0, Math.floor((new Date(g.lobby_ends_at).getTime() - Date.now()) / 1000));
+  return typeof s === 'number' && s >= 0 ? s : 0;
 }
 
 let _handledStatuses = new Set();
@@ -1147,11 +1231,14 @@ async function renderWallet() {
   const root = $('#wallet-view');
   if (!root) return;
 
+  const uid = State.profile?.id;
+  if (!uid) { root.innerHTML = '<div class="empty">Not signed in.</div>'; return; }
+
   await loadWallet();
   const { data: txs } = await sb
     .from('wallet_transactions')
     .select('*')
-    .eq('user_id', State.profile?.id)
+    .eq('user_id', uid)
     .order('created_at', { ascending: false })
     .limit(100);
 
@@ -1358,7 +1445,9 @@ function renderNotificationBadge() {
 async function subscribeToNotifications() {
   const uid = State.profile?.id;
   if (!uid) return;
-  sb.channel(`notifs:${uid}`)
+  await unsubscribeNotifications();
+
+  State.notifChannel = sb.channel(`notifs:${uid}`)
     .on('postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` },
       (payload) => {
@@ -1367,6 +1456,12 @@ async function subscribeToNotifications() {
         showToast(payload.new.title, 'info');
       })
     .subscribe();
+}
+
+async function unsubscribeNotifications() {
+  const ch = State.notifChannel;
+  State.notifChannel = null;
+  await removeChannelSafe(ch);
 }
 
 
@@ -1475,13 +1570,11 @@ const Admin = {
 
 
 /* ============================================================================
- * MARKETING (stub with sensible defaults — real campaigns live in admin.html)
+ * MARKETING (stub — real campaigns live in admin.html / a future service)
  * ==========================================================================*/
 
 const Marketing = {
   async broadcast(title, body) {
-    // Not exposing a service-role broadcast here. Admin.html calls a Secure
-    // Edge Function to fan out messages via the Telegram Bot API.
     console.info('[Marketing.broadcast]', title, body);
   },
 };
@@ -1579,6 +1672,8 @@ window.BingoApp = {
   loadStakeRooms, renderLobby, renderWallet, renderProfile, renderHistory,
   openCardSelection, closeCardSelection, joinStakeRoom,
   refreshGameState, enterGame, exitGame,
+  // Realtime cleanup (useful for admin.html and for sign-out flows)
+  unsubscribeGame, unsubscribeNotifications,
   // Utility
   showToast, fmtMoney, fmtTime, fmtDateTime,
   sb: () => sb,

@@ -1,5 +1,5 @@
-  {
-  "name": "bingo-telegram-auth",
+{
+  "name": "bingo",
   "version": "1.0.0",
   "private": true,
   "type": "module",

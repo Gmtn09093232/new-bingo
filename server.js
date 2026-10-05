@@ -1,15 +1,23 @@
 // telegram-auth/server.js
 //
-// Standalone Node service (runs on Render).
+// Bingo platform — single Render service
 //
-//   GET  /               →  status page (browser-friendly)
-//   GET  /health         →  { ok: true }
-//   POST /telegram-auth  →  { access_token, refresh_token, expires_at, user }
-//   POST /               →  alias for /telegram-auth
+//   GET  /                 → public/index.html   (player Mini App)
+//   GET  /admin            → public/admin.html   (admin console)
+//   GET  /app.js, /…       → any static asset from public/
+//   POST /telegram-auth    → verify Telegram initData, mint Supabase session
+//   GET  /health           → liveness probe
+//   GET  /status           → JSON status (for browser debugging)
 
 import express from 'express';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createHmac, timingSafeEqual as nodeTimingSafeEqual } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
 // ---------- env ----------
 const {
@@ -35,6 +43,8 @@ const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '32kb' }));
 
+// CORS — open, because Telegram Mini App WebViews originate from many places.
+// Security comes from the initData hash, not from an origin allowlist.
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin',  ALLOWED_ORIGIN);
   res.setHeader('Access-Control-Allow-Headers', 'authorization, x-client-info, apikey, content-type');
@@ -43,26 +53,60 @@ app.use((req, res, next) => {
   next();
 });
 
-// ---------- routes ----------
-app.get('/health', (_req, res) => res.json({ ok: true, at: new Date().toISOString() }));
+// ============================================================================
+// API ROUTES  (must be declared BEFORE express.static so POST works)
+// ============================================================================
 
-app.get('/', (_req, res) => {
+app.get('/health', (_req, res) =>
+  res.json({ ok: true, at: new Date().toISOString() })
+);
+
+app.get('/status', (_req, res) =>
   res.json({
-    service: 'bingo-telegram-auth',
+    service: 'bingo',
     status:  'up',
     at:      new Date().toISOString(),
     endpoints: {
+      'GET  /':              'Player Mini App',
+      'GET  /admin':         'Admin console',
       'POST /telegram-auth': 'Validate Telegram initData and mint a Supabase session',
       'GET  /health':        'Liveness probe',
     },
-    hint: 'POST { "initData": "..." } to /telegram-auth',
-  });
-});
+  })
+);
 
 app.post('/telegram-auth', handleAuth);
-app.post('/',              handleAuth);
 
-// ---------- main handler ----------
+// ============================================================================
+// STATIC FILES  (HTML, JS, images, CSS from public/)
+// ============================================================================
+//
+//   index: 'index.html'  → GET /       serves public/index.html
+//   extensions: ['html'] → GET /admin  serves public/admin.html
+//   maxAge: '1h'         → browser cache; safe because HTML is fetched fresh
+//
+app.use(express.static(PUBLIC_DIR, {
+  index:      'index.html',
+  extensions: ['html'],
+  maxAge:     '1h',
+  etag:       true,
+}));
+
+// ============================================================================
+// 404 — JSON for API paths, plain text otherwise
+// ============================================================================
+
+app.use((req, res) => {
+  if (req.method !== 'GET' || req.path.startsWith('/api') || req.path.includes('.')) {
+    return res.status(404).json({ error: 'NOT_FOUND', path: req.path });
+  }
+  res.status(404).send('Not found');
+});
+
+// ============================================================================
+// MAIN HANDLER — /telegram-auth
+// ============================================================================
+
 async function handleAuth(req, res) {
   try {
     const initData = req.body?.initData;
@@ -89,10 +133,12 @@ async function handleAuth(req, res) {
 
     let session = null;
 
+    // Fast path: try to sign in.
     const signIn = await authClient.auth.signInWithPassword({ email, password });
     if (!signIn.error && signIn.data.session) {
       session = signIn.data.session;
     } else {
+      // Create the user.
       const created = await admin.auth.admin.createUser({
         email,
         password,
@@ -109,6 +155,7 @@ async function handleAuth(req, res) {
         return res.status(500).json({ error: 'USER_CREATE_FAILED' });
       }
 
+      // Existing account with a stale password (bot token rotated).
       if (alreadyExists) {
         const { data: profile, error: pErr } = await admin
           .from('profiles')
@@ -167,7 +214,11 @@ async function handleAuth(req, res) {
 
 // ---------- listen ----------
 app.listen(PORT, () => {
-  console.log(`[telegram-auth] listening on :${PORT}`);
+  console.log(`[bingo] listening on :${PORT}`);
+  console.log(`[bingo] serving static from ${PUBLIC_DIR}`);
+  console.log(`[bingo]   GET  /`);
+  console.log(`[bingo]   GET  /admin`);
+  console.log(`[bingo]   POST /telegram-auth`);
 });
 
 // ============================================================================

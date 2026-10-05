@@ -1,13 +1,11 @@
-// telegram-auth/server.js
+// server.js — Bingo platform (single Render service)
 //
-// Bingo platform — single Render service
-//
-//   GET  /                 → public/index.html   (player Mini App)
-//   GET  /admin            → public/admin.html   (admin console)
-//   GET  /app.js, /…       → any static asset from public/
+//   GET  /                 → index.html        (player Mini App)
+//   GET  /admin            → admin.html        (admin console)
+//   GET  /app.js, /favicon → any static file from this folder
 //   POST /telegram-auth    → verify Telegram initData, mint Supabase session
 //   GET  /health           → liveness probe
-//   GET  /status           → JSON status (for browser debugging)
+//   GET  /status           → JSON status
 
 import express from 'express';
 import path from 'node:path';
@@ -17,7 +15,8 @@ import { createClient } from '@supabase/supabase-js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
-const PUBLIC_DIR = path.join(__dirname, '');
+// Serve static files from this same folder (repo root).
+const STATIC_DIR = __dirname;
 
 // ---------- env ----------
 const {
@@ -35,7 +34,7 @@ const MAX_AUTH_AGE_SEC  = 60 * 60 * 24;   // 24 h
 for (const [k, v] of Object.entries({
   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, TELEGRAM_BOT_TOKEN,
 })) {
-  if (!v) { console.error(`[telegram-auth] missing env: ${k}`); process.exit(1); }
+  if (!v) { console.error(`[bingo] missing env: ${k}`); process.exit(1); }
 }
 
 // ---------- app ----------
@@ -43,7 +42,7 @@ const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '32kb' }));
 
-// CORS — open, because Telegram Mini App WebViews originate from many places.
+// CORS — open. Telegram Mini App WebViews originate from many places.
 // Security comes from the initData hash, not from an origin allowlist.
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin',  ALLOWED_ORIGIN);
@@ -54,7 +53,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================================================
-// API ROUTES  (must be declared BEFORE express.static so POST works)
+// API ROUTES — declared before static so POST is handled correctly
 // ============================================================================
 
 app.get('/health', (_req, res) =>
@@ -78,33 +77,55 @@ app.get('/status', (_req, res) =>
 app.post('/telegram-auth', handleAuth);
 
 // ============================================================================
-// STATIC FILES  (HTML, JS, images, CSS from public/)
+// STATIC FILES — index.html, admin.html, app.js, favicon, images, CSS
 // ============================================================================
 //
-//   index: 'index.html'  → GET /       serves public/index.html
-//   extensions: ['html'] → GET /admin  serves public/admin.html
-//   maxAge: '1h'         → browser cache; safe because HTML is fetched fresh
+//   index: 'index.html'  → GET /       serves index.html
+//   extensions: ['html'] → GET /admin  serves admin.html
 //
-app.use(express.static(PUBLIC_DIR, {
+app.use(express.static(STATIC_DIR, {
   index:      'index.html',
   extensions: ['html'],
   maxAge:     '1h',
   etag:       true,
+  // Don't leak server.js, package.json, .env, database.sql
+  setHeaders(res, filePath) {
+    const base = path.basename(filePath);
+    if (base === 'server.js' || base === 'package.json' ||
+        base === 'package-lock.json' || base === 'database.sql' ||
+        base.startsWith('.env')) {
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('X-Robots-Tag', 'noindex');
+    }
+  },
 }));
 
 // ============================================================================
-// 404 — JSON for API paths, plain text otherwise
+// Explicitly block the sensitive files (defence in depth)
+// ============================================================================
+
+const BLOCKED = new Set([
+  '/server.js', '/package.json', '/package-lock.json',
+  '/database.sql', '/.env', '/.env.example', '/.gitignore',
+]);
+app.use((req, res, next) => {
+  if (BLOCKED.has(req.path)) return res.status(404).send('Not found');
+  next();
+});
+
+// ============================================================================
+// 404
 // ============================================================================
 
 app.use((req, res) => {
-  if (req.method !== 'GET' || req.path.startsWith('/api') || req.path.includes('.')) {
+  if (req.method !== 'GET' || req.path.includes('.')) {
     return res.status(404).json({ error: 'NOT_FOUND', path: req.path });
   }
   res.status(404).send('Not found');
 });
 
 // ============================================================================
-// MAIN HANDLER — /telegram-auth
+// /telegram-auth handler
 // ============================================================================
 
 async function handleAuth(req, res) {
@@ -133,12 +154,10 @@ async function handleAuth(req, res) {
 
     let session = null;
 
-    // Fast path: try to sign in.
     const signIn = await authClient.auth.signInWithPassword({ email, password });
     if (!signIn.error && signIn.data.session) {
       session = signIn.data.session;
     } else {
-      // Create the user.
       const created = await admin.auth.admin.createUser({
         email,
         password,
@@ -155,7 +174,6 @@ async function handleAuth(req, res) {
         return res.status(500).json({ error: 'USER_CREATE_FAILED' });
       }
 
-      // Existing account with a stale password (bot token rotated).
       if (alreadyExists) {
         const { data: profile, error: pErr } = await admin
           .from('profiles')
@@ -215,7 +233,7 @@ async function handleAuth(req, res) {
 // ---------- listen ----------
 app.listen(PORT, () => {
   console.log(`[bingo] listening on :${PORT}`);
-  console.log(`[bingo] serving static from ${PUBLIC_DIR}`);
+  console.log(`[bingo] static dir: ${STATIC_DIR}`);
   console.log(`[bingo]   GET  /`);
   console.log(`[bingo]   GET  /admin`);
   console.log(`[bingo]   POST /telegram-auth`);
